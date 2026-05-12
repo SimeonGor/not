@@ -35,4 +35,7 @@ struct PagerViewModel {
   uint16_t pairingPin;
   int16_t scrollOffset;
   const TextLayout *messageLayout;
+  char deviceId[13];
+  bool wifiConnected;
+  bool mqttConnected;
 };

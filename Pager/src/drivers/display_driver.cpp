@@ -4,6 +4,8 @@
 #include <Adafruit_SSD1306.h>
 #include <Wire.h>
 
+#include <cstring>
+
 #include "config.h"
 
 namespace {
@@ -32,33 +34,54 @@ void DisplayDriver::drawStatusBar_(const __FlashStringHelper *statusText) {
 }
 
 void DisplayDriver::drawPairingScreen_(const PagerViewModel &viewModel) {
-  drawStatusBar_(F("Status: Offline"));
+  drawStatusBar_(F("PAIRING"));
 
   display.setTextSize(1);
-  display.setCursor(0, 18);
+  display.setCursor(0, 12);
   display.println(F("PAIRING MODE"));
 
   display.setTextSize(2);
-  display.setCursor(16, 34);
+  display.setCursor(20, 24);
   display.print(viewModel.pairingPin);
 
   display.setTextSize(1);
-  display.setCursor(0, 56);
-  display.print(F("Press OK >"));
+  display.setCursor(0, 44);
+  display.print(F("ID:"));
+  display.print(viewModel.deviceId);
+
+  display.setCursor(0, 54);
+  display.print(F("OK=next"));
 }
 
 void DisplayDriver::drawIdleScreen_(const PagerViewModel &viewModel) {
-  if (viewModel.networkStatus == NETWORK_OFFLINE) {
-    drawStatusBar_(F("Status: Offline"));
-  } else {
-    drawStatusBar_(F("Status: Online"));
-  }
+  drawStatusBar_(F("IDLE"));
 
   display.setTextSize(1);
-  display.setCursor(10, 28);
-  display.println(F("NO NEW"));
-  display.setCursor(8, 38);
-  display.println(F("MESSAGES"));
+  display.setCursor(0, 12);
+  display.println(F("NO NEW MESSAGES"));
+
+  display.setCursor(0, 22);
+  display.print(F("WiFi:"));
+  display.print(viewModel.wifiConnected ? F("OK") : F("OFF"));
+
+  display.setCursor(0, 32);
+  display.print(F("MQTT:"));
+  display.print(viewModel.mqttConnected ? F("OK") : F("OFF"));
+
+  display.setCursor(0, 42);
+  display.print(F("ID .."));
+  const char *id = viewModel.deviceId;
+  const size_t len = strlen(id);
+  if (len >= 4) {
+    display.print(id + len - 4);
+  } else {
+    display.print(id);
+  }
+
+  if (ENABLE_LOCAL_MOCK_MESSAGE) {
+    display.setCursor(0, 54);
+    display.print(F("OK=mock"));
+  }
 }
 
 void DisplayDriver::drawReadingScreen_(const PagerViewModel &viewModel) {

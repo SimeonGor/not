@@ -5,26 +5,51 @@
 void BuzzerDriver::begin() {
   pinMode(PIN_BUZZER, OUTPUT);
   off_();
+  phase_ = kPhaseIdle;
+  phaseEndMs_ = 0;
+  pulsesRemaining_ = 0;
 }
 
 void BuzzerDriver::off_() {
   digitalWrite(PIN_BUZZER, LOW);
 }
 
-void BuzzerDriver::beep(const uint16_t durationMs) {
+void BuzzerDriver::startClickBeep() {
+  phase_ = kPhaseOn;
+  pulsesRemaining_ = 1;
   digitalWrite(PIN_BUZZER, HIGH);
-  delay(durationMs);
-  off_();
+  phaseEndMs_ = millis() + kOnMs;
 }
 
-void BuzzerDriver::beepIncomingMessage() {
-  const uint8_t beepCount = 2;
-  for (uint8_t i = 0; i < beepCount; i++) {
-    digitalWrite(PIN_BUZZER, HIGH);
-    delay(BEEP_MESSAGE_ON_MS);
-    off_();
-    if (i + 1 < beepCount) {
-      delay(BEEP_MESSAGE_OFF_MS);
-    }
+void BuzzerDriver::startIncomingBeep() {
+  phase_ = kPhaseOn;
+  pulsesRemaining_ = 3;
+  digitalWrite(PIN_BUZZER, HIGH);
+  phaseEndMs_ = millis() + kOnMs;
+}
+
+void BuzzerDriver::update(const uint32_t nowMs) {
+  if (phase_ == kPhaseIdle) {
+    return;
   }
+
+  if (static_cast<int32_t>(nowMs - phaseEndMs_) < 0) {
+    return;
+  }
+
+  if (phase_ == kPhaseOn) {
+    off_();
+    pulsesRemaining_--;
+    if (pulsesRemaining_ == 0) {
+      phase_ = kPhaseIdle;
+      return;
+    }
+    phase_ = kPhaseGap;
+    phaseEndMs_ = nowMs + kGapMs;
+    return;
+  }
+
+  phase_ = kPhaseOn;
+  digitalWrite(PIN_BUZZER, HIGH);
+  phaseEndMs_ = nowMs + kOnMs;
 }

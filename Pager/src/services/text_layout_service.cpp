@@ -10,6 +10,16 @@ void skipSpacesPGM(const char *text, uint16_t &index) {
     index++;
   }
 }
+
+void skipSpacesRam(const char *text, uint16_t &index) {
+  while (text[index] != '\0') {
+    const char ch = text[index];
+    if (ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r') {
+      break;
+    }
+    index++;
+  }
+}
 }  // namespace
 
 TextLayout TextLayoutService::wrapProgmemText(const char *textFromProgmem) {
@@ -84,6 +94,97 @@ TextLayout TextLayoutService::wrapProgmemText(const char *textFromProgmem) {
 
     layout.lines[layout.lineCount][lineLen] = '\0';
     layout.lineCount++;
+  }
+
+  const int32_t totalContentHeight = static_cast<int32_t>(layout.lineCount) * LINE_HEIGHT;
+  const int32_t maxScroll = totalContentHeight - CONTENT_VIEW_HEIGHT;
+  layout.maxScrollOffset = (maxScroll > 0) ? static_cast<int16_t>(maxScroll) : 0;
+  return layout;
+}
+
+TextLayout TextLayoutService::wrapRamText(const char *textFromRam) {
+  TextLayout layout = {};
+  if (textFromRam == nullptr || textFromRam[0] == '\0') {
+    layout.lines[0][0] = ' ';
+    layout.lines[0][1] = '\0';
+    layout.lineCount = 1;
+    layout.maxScrollOffset = 0;
+    return layout;
+  }
+
+  uint16_t index = 0;
+
+  while (layout.lineCount < MAX_WRAPPED_LINES) {
+    skipSpacesRam(textFromRam, index);
+    if (textFromRam[index] == '\0') {
+      break;
+    }
+
+    uint8_t lineLen = 0;
+    uint16_t wordStart = index;
+    uint8_t wordLen = 0;
+
+    while (layout.lineCount < MAX_WRAPPED_LINES) {
+      const char ch = textFromRam[index];
+      if (ch == '\0') {
+        break;
+      }
+
+      if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
+        if (wordLen > 0) {
+          if (lineLen == 0 || lineLen + wordLen <= LINE_CHAR_CAPACITY) {
+            for (uint8_t i = 0; i < wordLen; i++) {
+              layout.lines[layout.lineCount][lineLen++] = textFromRam[wordStart + i];
+            }
+            index = wordStart + wordLen;
+            wordStart = index;
+            wordLen = 0;
+            skipSpacesRam(textFromRam, index);
+            wordStart = index;
+            continue;
+          }
+          break;
+        }
+
+        index++;
+        wordStart = index;
+        continue;
+      }
+
+      wordLen++;
+      index++;
+
+      if (wordLen > LINE_CHAR_CAPACITY) {
+        for (uint8_t i = 0; i < LINE_CHAR_CAPACITY; i++) {
+          layout.lines[layout.lineCount][i] = textFromRam[index - wordLen + i];
+        }
+        lineLen = LINE_CHAR_CAPACITY;
+        index = wordStart + wordLen;
+        break;
+      }
+    }
+
+    if (lineLen == 0 && wordLen > 0) {
+      const uint8_t copyLen = min(wordLen, LINE_CHAR_CAPACITY);
+      for (uint8_t i = 0; i < copyLen; i++) {
+        layout.lines[layout.lineCount][i] = textFromRam[wordStart + i];
+      }
+      lineLen = copyLen;
+      index = wordStart + wordLen;
+    }
+
+    if (lineLen == 0) {
+      break;
+    }
+
+    layout.lines[layout.lineCount][lineLen] = '\0';
+    layout.lineCount++;
+  }
+
+  if (layout.lineCount == 0) {
+    layout.lines[0][0] = ' ';
+    layout.lines[0][1] = '\0';
+    layout.lineCount = 1;
   }
 
   const int32_t totalContentHeight = static_cast<int32_t>(layout.lineCount) * LINE_HEIGHT;

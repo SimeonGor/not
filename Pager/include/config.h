@@ -24,8 +24,18 @@ static const int16_t SCROLL_STEP_PX = 8;
 static const uint8_t MAX_WRAPPED_LINES = 32;
 static const uint8_t LINE_CHAR_CAPACITY = 21;
 
-// Ввод и звук
+// Ввод (антидребезг)
 static const uint32_t DEBOUNCE_MS = 150;
-static const uint16_t BEEP_SHORT_MS = 60;
-static const uint16_t BEEP_MESSAGE_ON_MS = 100;
-static const uint16_t BEEP_MESSAGE_OFF_MS = 80;
+
+// --- Сеть (этап 2): MQTT_HOST — LAN IP машины с Docker/Mosquitto, не localhost ---
+static constexpr const char *WIFI_SSID = "YOUR_WIFI_NAME";
+static constexpr const char *WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+static constexpr const char *MQTT_HOST = "192.168.1.45";
+static constexpr int MQTT_PORT = 1883;
+
+// В IDLE: OK подставляет mock только при true (тест без брокера)
+static constexpr bool ENABLE_LOCAL_MOCK_MESSAGE = true;
+
+static constexpr uint32_t NETWORK_RETRY_INTERVAL_MS = 5000;
+static constexpr uint32_t DISPLAY_UPDATE_INTERVAL_MS = 150;
+static constexpr size_t RX_MESSAGE_MAX_LEN = 256;

@@ -23,11 +23,13 @@ class PagerApp {
   uint16_t pairingPin_;
   int16_t scrollOffset_;
   bool uiDirty_;
+  uint32_t lastDisplayUpdateMs_;
 
   void enterPairingState_();
   void enterIdleState_();
   void enterReadingState_(bool playIncomingBeeps);
   void processLogic_(ButtonEvent event);
-  void drawUI_();
-  PagerViewModel buildViewModel_() const;
+  void drawUI_(uint32_t nowMs);
+  void applyIncomingMqtt_();
+  PagerViewModel buildViewModel_();
 };
