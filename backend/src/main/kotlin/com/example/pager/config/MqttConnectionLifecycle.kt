@@ -17,6 +17,7 @@ class MqttConnectionLifecycle(
     @PostConstruct
     fun connect() {
         log.info("[MQTT] Connecting to broker {}", mqttProperties.brokerUrl)
+        mqttClient.setTimeToWait(30_000)
         val options =
             MqttConnectOptions().apply {
                 isCleanSession = true

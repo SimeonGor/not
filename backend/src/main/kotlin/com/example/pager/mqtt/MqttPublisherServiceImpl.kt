@@ -2,7 +2,6 @@ package com.example.pager.mqtt
 
 import com.example.pager.config.MqttProperties
 import com.example.pager.device.DeviceIdNormalizer
-import org.eclipse.paho.client.mqttv3.IMqttToken
 import org.eclipse.paho.client.mqttv3.MqttClient
 import org.eclipse.paho.client.mqttv3.MqttException
 import org.eclipse.paho.client.mqttv3.MqttMessage
@@ -18,9 +17,9 @@ class MqttPublisherServiceImpl(
     private val log = LoggerFactory.getLogger(javaClass)
 
     /**
-     * Paho's synchronous client is not safe for concurrent [publish] + [IMqttToken.waitForCompletion]
-     * when automatic reconnect is enabled: parallel HTTP + Telegram can throw [MqttException] even
-     * though the broker already accepted the message. Serialize the critical section.
+     * [MqttClient] implements blocking [org.eclipse.paho.client.mqttv3.IMqttClient]: [MqttClient.publish]
+     * already waits for QoS handshake internally (returns `void` / Kotlin [Unit] — there is no token).
+     * Concurrent calls from HTTP + Telegram can still race the delegate; serialize publishes.
      */
     private val publishLock = Any()
 
@@ -42,8 +41,7 @@ class MqttPublisherServiceImpl(
                 if (!mqttClient.isConnected) {
                     throw MqttPublishException("MQTT client is not connected")
                 }
-                val token = mqttClient.publish(topic, message) as IMqttToken
-                token.waitForCompletion(30_000)
+                mqttClient.publish(topic, message)
                 log.info("[MQTT] Publish success")
             } catch (e: MqttException) {
                 log.warn(
