@@ -34,24 +34,75 @@ void DisplayDriver::drawStatusBar_(const __FlashStringHelper *statusText) {
   display.drawFastHLine(0, 10, SCREEN_WIDTH, SSD1306_WHITE);
 }
 
+void DisplayDriver::drawBootScreen_() {
+  drawStatusBar_(F("BOOT"));
+  display.setTextSize(1);
+  display.setCursor(0, 14);
+  display.println(F("Smart Pager"));
+  display.setCursor(0, 28);
+  display.println(F("Phase 4A"));
+}
+
+void DisplayDriver::drawConnectingScreen_() {
+  drawStatusBar_(F("NET"));
+  display.setTextSize(1);
+  display.setCursor(0, 14);
+  display.println(F("Connecting WiFi"));
+  display.setCursor(0, 28);
+  display.println(F("Please wait..."));
+}
+
 void DisplayDriver::drawPairingScreen_(const PagerViewModel &viewModel) {
-  drawStatusBar_(F("PAIRING"));
+  drawStatusBar_(F("PAIR"));
 
   display.setTextSize(1);
   display.setCursor(0, 12);
   display.println(F("PAIRING MODE"));
 
+  if (viewModel.pairingRefreshing) {
+    display.setCursor(0, 28);
+    display.println(F("Refreshing PIN..."));
+    return;
+  }
+
+  if (viewModel.pairingBackendError || viewModel.pairingPin[0] == '\0') {
+    display.setCursor(0, 24);
+    display.println(F("PAIRING ERROR"));
+    display.setCursor(0, 36);
+    display.println(F("Backend offline"));
+    display.setCursor(0, 48);
+    display.println(F("Retrying..."));
+    return;
+  }
+
+  display.setCursor(0, 22);
+  display.print(F("PIN:"));
   display.setTextSize(2);
-  display.setCursor(20, 24);
+  display.setCursor(0, 30);
   display.print(viewModel.pairingPin);
 
   display.setTextSize(1);
-  display.setCursor(0, 44);
-  display.print(F("ID:"));
-  display.print(viewModel.deviceId);
+  char ttlBuf[12];
+  const int rs = viewModel.pairingRemainingSeconds;
+  const int m = (rs < 0 ? 0 : rs) / 60;
+  const int s = (rs < 0 ? 0 : rs) % 60;
+  snprintf(ttlBuf, sizeof(ttlBuf), "%02d:%02d", m, s);
+  display.setCursor(0, 48);
+  display.print(F("TTL "));
+  display.print(ttlBuf);
+  display.print(F(" "));
+  display.print(TELEGRAM_BOT_HANDLE);
+}
 
-  display.setCursor(0, 54);
-  display.print(F("OK=next"));
+void DisplayDriver::drawErrorScreen_() {
+  drawStatusBar_(F("ERR"));
+  display.setTextSize(1);
+  display.setCursor(0, 20);
+  display.println(F("PAIRING ERROR"));
+  display.setCursor(0, 36);
+  display.println(F("Backend offline"));
+  display.setCursor(0, 48);
+  display.println(F("Retrying..."));
 }
 
 void DisplayDriver::drawIdleScreen_(const PagerViewModel &viewModel) {
@@ -59,28 +110,36 @@ void DisplayDriver::drawIdleScreen_(const PagerViewModel &viewModel) {
 
   display.setTextSize(1);
   display.setCursor(0, 12);
-  display.println(F("NO NEW MESSAGES"));
+  if (viewModel.bindSuccessFlash) {
+    display.println(F("BOUND OK"));
+  } else {
+    display.println(F("NO NEW MESSAGES"));
+  }
 
   display.setCursor(0, 22);
   display.print(F("WiFi:"));
   display.print(viewModel.wifiConnected ? F("OK") : F("OFF"));
 
-  display.setCursor(0, 32);
+  display.setCursor(64, 22);
   display.print(F("MQTT:"));
   display.print(viewModel.mqttConnected ? F("OK") : F("OFF"));
 
+  display.setCursor(0, 32);
+  display.print(F("Back:"));
+  display.print(viewModel.backendReachable ? F("OK") : F("OFF"));
+
+  display.setCursor(64, 32);
+  display.print(viewModel.isBound ? F("BND") : F("---"));
+
   display.setCursor(0, 42);
   display.print(F("ID .."));
-  const char *id = viewModel.deviceId;
-  const size_t len = strlen(id);
-  if (len >= 4) {
-    display.print(id + len - 4);
-  } else {
-    display.print(id);
-  }
+  display.print(viewModel.deviceIdTail);
 
-  if (ENABLE_LOCAL_MOCK_MESSAGE) {
-    display.setCursor(0, 54);
+  if (viewModel.factoryResetErrorFlash) {
+    display.setCursor(0, 52);
+    display.print(F("RST: no ACK"));
+  } else if (ENABLE_LOCAL_MOCK_MESSAGE) {
+    display.setCursor(0, 52);
     display.print(F("OK=mock"));
   }
 }
@@ -112,11 +171,9 @@ void DisplayDriver::drawReadingScreen_(const PagerViewModel &viewModel) {
     const int16_t lineY =
         CONTENT_TOP_Y + static_cast<int16_t>(lineIndex) * LINE_HEIGHT - scrollOffsetPx;
 
-    // Не рисуем в зоне статус-бара (y < CONTENT_TOP_Y), иначе при прокрутке текст наезжает на «READING».
     if (lineY < CONTENT_TOP_Y) {
       continue;
     }
-    // Не заходим на полосу счётчика / подсказки внизу экрана
     if (lineY + LINE_HEIGHT > READING_FOOTER_TOP_Y) {
       continue;
     }
@@ -139,7 +196,6 @@ void DisplayDriver::drawReadingScreen_(const PagerViewModel &viewModel) {
     char scrollBuf[20];
     snprintf(scrollBuf, sizeof(scrollBuf), "%d/%d", static_cast<int>(viewModel.scrollLine),
              static_cast<int>(layout.maxScrollLines));
-    // Шрифт size 1: ~6 px на символ; выравниваем вправо
     const size_t slen = strlen(scrollBuf);
     const int16_t charPx = 6;
     int16_t x = static_cast<int16_t>(SCREEN_WIDTH - static_cast<int>(slen) * charPx);
@@ -158,6 +214,12 @@ void DisplayDriver::drawUI(const PagerViewModel &viewModel) {
   display.clearDisplay();
 
   switch (viewModel.state) {
+    case STATE_BOOT:
+      drawBootScreen_();
+      break;
+    case STATE_CONNECTING:
+      drawConnectingScreen_();
+      break;
     case STATE_PAIRING:
       drawPairingScreen_(viewModel);
       break;
@@ -166,6 +228,9 @@ void DisplayDriver::drawUI(const PagerViewModel &viewModel) {
       break;
     case STATE_READING:
       drawReadingScreen_(viewModel);
+      break;
+    case STATE_ERROR:
+      drawErrorScreen_();
       break;
   }
 

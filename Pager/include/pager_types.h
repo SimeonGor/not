@@ -5,9 +5,12 @@
 #include "config.h"
 
 enum SystemState {
+  STATE_BOOT,
+  STATE_CONNECTING,
   STATE_PAIRING,
   STATE_IDLE,
-  STATE_READING
+  STATE_READING,
+  STATE_ERROR
 };
 
 enum ButtonEvent {
@@ -33,11 +36,22 @@ struct TextLayout {
 struct PagerViewModel {
   SystemState state;
   NetworkStatus networkStatus;
-  uint16_t pairingPin;
+  /** Текущий PIN (до 6 цифр + '\0'); пусто если нет активного PIN. */
+  char pairingPin[PAIRING_PIN_MAX_LEN + 1];
+  int pairingRemainingSeconds;
+  bool pairingRefreshing;
+  bool pairingBackendError;
+  bool backendReachable;
+  bool isBound;
   /** Прокрутка текста в целых строках (высота строки = LINE_HEIGHT px). */
   int16_t scrollLine;
   const TextLayout *messageLayout;
   char deviceId[13];
+  /** Последние символы deviceId для IDLE (например 6). */
+  char deviceIdTail[7];
   bool wifiConnected;
   bool mqttConnected;
+  /** Кратко показать «привязано» после BIND_SUCCESS. */
+  bool bindSuccessFlash;
+  bool factoryResetErrorFlash;
 };

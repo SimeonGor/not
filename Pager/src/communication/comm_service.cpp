@@ -4,15 +4,29 @@
 
 #include "config.h"
 
-// Слой коммуникации (этап 2): неблокирующий Wi‑Fi и MQTT, топик pager/{deviceId}/rx.
-// Переподключение не чаще NETWORK_RETRY_INTERVAL_MS; в loop() вызывается mqttClient.loop().
-
 namespace {
 CommService *gComm = nullptr;
 
 void mqttStaticCallback(char *topic, byte *payload, unsigned int length) {
   if (gComm != nullptr) {
     gComm->onMqttMessage(topic, payload, length);
+  }
+}
+
+void trimInPlace(char *s) {
+  if (s == nullptr || s[0] == '\0') {
+    return;
+  }
+  char *end = s + strlen(s);
+  while (end > s && (end[-1] == ' ' || end[-1] == '\r' || end[-1] == '\n' || end[-1] == '\t')) {
+    *--end = '\0';
+  }
+  char *start = s;
+  while (*start == ' ' || *start == '\r' || *start == '\n' || *start == '\t') {
+    ++start;
+  }
+  if (start != s) {
+    memmove(s, start, strlen(start) + 1);
   }
 }
 }  // namespace
@@ -23,6 +37,9 @@ void CommService::begin() {
   gComm = this;
   rxBuffer_[0] = '\0';
   rxPending_ = false;
+  sysBuffer_[0] = '\0';
+  sysPending_ = false;
+  deviceBoundForRx_ = false;
   lastWifiAttemptMs_ = 0;
   lastMqttAttemptMs_ = 0;
   wifiWasConnected_ = false;
@@ -33,6 +50,7 @@ void CommService::begin() {
 
   refreshDeviceId_();
   snprintf(topicRx_, sizeof(topicRx_), "pager/%s/rx", deviceId_);
+  snprintf(topicSys_, sizeof(topicSys_), "pager/%s/sys", deviceId_);
 
   mqttClient_.setServer(MQTT_HOST, MQTT_PORT);
   mqttClient_.setBufferSize(512);
@@ -43,11 +61,18 @@ void CommService::begin() {
   Serial.println(deviceId_);
   Serial.print(F("[Comm] topicRx="));
   Serial.println(topicRx_);
+  Serial.print(F("[Comm] topicSys="));
+  Serial.println(topicSys_);
+}
+
+void CommService::setDeviceBoundForRx(const bool bound) {
+  deviceBoundForRx_ = bound;
 }
 
 void CommService::refreshDeviceId_() {
   String mac = WiFi.macAddress();
   mac.replace(":", "");
+  mac.toUpperCase();
   mac.toCharArray(deviceId_, sizeof(deviceId_));
 }
 
@@ -98,7 +123,13 @@ void CommService::tryMqttConnect_() {
       Serial.print(F("[Comm] MQTT subscribed "));
       Serial.println(topicRx_);
     } else {
-      Serial.println(F("[Comm] MQTT subscribe failed"));
+      Serial.println(F("[Comm] MQTT subscribe rx failed"));
+    }
+    if (mqttClient_.subscribe(topicSys_)) {
+      Serial.print(F("[Comm] MQTT subscribed "));
+      Serial.println(topicSys_);
+    } else {
+      Serial.println(F("[Comm] MQTT subscribe sys failed"));
     }
   } else {
     Serial.print(F("[Comm] MQTT connect failed, rc="));
@@ -169,20 +200,65 @@ bool CommService::takeRxPayload(char *out, const size_t outSize) {
   return true;
 }
 
-void CommService::onMqttMessage(char *topic, byte *payload, unsigned int length) {
-  (void)topic;
-
-  size_t n = length;
-  if (n > RX_MESSAGE_MAX_LEN) {
-    n = RX_MESSAGE_MAX_LEN;
+MqttSysCommand CommService::takePendingSysCommand() {
+  noInterrupts();
+  if (!sysPending_) {
+    interrupts();
+    return MqttSysCommand::None;
   }
 
-  memcpy(rxBuffer_, payload, n);
-  rxBuffer_[n] = '\0';
-  rxPending_ = true;
+  char local[sizeof(sysBuffer_)];
+  memcpy(local, sysBuffer_, sizeof(local));
+  sysPending_ = false;
+  interrupts();
 
-  Serial.print(F("[Comm] MQTT rx len="));
-  Serial.print(length);
-  Serial.print(F(" text="));
-  Serial.println(rxBuffer_);
+  trimInPlace(local);
+  Serial.print(F("[Comm] sys command payload="));
+  Serial.println(local);
+
+  if (strcmp(local, "BIND_SUCCESS") == 0) {
+    return MqttSysCommand::BindSuccess;
+  }
+  if (strcmp(local, "UNBOUND") == 0) {
+    return MqttSysCommand::Unbound;
+  }
+  return MqttSysCommand::None;
+}
+
+void CommService::onMqttMessage(char *topic, byte *payload, unsigned int length) {
+  if (strcmp(topic, topicRx_) == 0) {
+    if (!deviceBoundForRx_) {
+      Serial.println(F("[Comm] MQTT rx ignored (device not bound)"));
+      return;
+    }
+
+    size_t n = length;
+    if (n > RX_MESSAGE_MAX_LEN) {
+      n = RX_MESSAGE_MAX_LEN;
+    }
+
+    memcpy(rxBuffer_, payload, n);
+    rxBuffer_[n] = '\0';
+    rxPending_ = true;
+
+    Serial.print(F("[Comm] MQTT rx len="));
+    Serial.print(length);
+    Serial.print(F(" text="));
+    Serial.println(rxBuffer_);
+    return;
+  }
+
+  if (strcmp(topic, topicSys_) == 0) {
+    size_t n = length;
+    if (n >= sizeof(sysBuffer_)) {
+      n = sizeof(sysBuffer_) - 1;
+    }
+    memcpy(sysBuffer_, payload, n);
+    sysBuffer_[n] = '\0';
+    sysPending_ = true;
+    return;
+  }
+
+  Serial.print(F("[Comm] MQTT unknown topic="));
+  Serial.println(topic);
 }

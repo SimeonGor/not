@@ -38,9 +38,22 @@ static constexpr const char *WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
 static constexpr const char *MQTT_HOST = "192.168.1.45";
 static constexpr int MQTT_PORT = 1883;
 
+// --- Backend Phase 4A (HTTP pairing). NodeMCU cannot use "localhost" — use the LAN IP of the PC
+// where Spring Boot runs (same Wi‑Fi as the device). ---
+static constexpr const char *BACKEND_HOST = "192.168.1.45";
+static constexpr int BACKEND_PORT = 8080;
+
+/** Подпись бота на экране привязки (Telegram). */
+static constexpr const char *TELEGRAM_BOT_HANDLE = "@YourBot";
+
+static constexpr uint32_t PIN_REFRESH_RETRY_INTERVAL_MS = 10000;
+static constexpr uint32_t FACTORY_RESET_HOLD_MS = 5000;
+static constexpr uint32_t BIND_SUCCESS_FLASH_MS = 2000;
+
 // В IDLE: OK подставляет mock только при true (тест без брокера)
-static constexpr bool ENABLE_LOCAL_MOCK_MESSAGE = true;
+static constexpr bool ENABLE_LOCAL_MOCK_MESSAGE = false;
 
 static constexpr uint32_t NETWORK_RETRY_INTERVAL_MS = 5000;
 static constexpr uint32_t DISPLAY_UPDATE_INTERVAL_MS = 150;
 static constexpr size_t RX_MESSAGE_MAX_LEN = 256;
+static constexpr size_t PAIRING_PIN_MAX_LEN = 6;
