@@ -16,6 +16,11 @@ void BuzzerDriver::off_() {
 }
 
 void BuzzerDriver::startClickBeep() {
+  // Не перезапускать импульс, пока предыдущий не завершён: иначе каждый вызов
+  // сбрасывает phaseEndMs_ и update() никогда не гасит пин — получается «залипший» HIGH.
+  if (phase_ != kPhaseIdle) {
+    return;
+  }
   successTone_ = false;
   phase_ = kPhaseOn;
   pulsesRemaining_ = 1;
