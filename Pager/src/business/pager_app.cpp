@@ -8,18 +8,20 @@
 
 #include "config.h"
 #include "services/eeprom_binding_store.h"
+#include "services/message_history.h"
 #include "services/text_layout_service.h"
 
 void PagerApp::begin() {
   Serial.begin(115200);
   delay(50);
   Serial.println();
-  Serial.println(F("[Pager] boot Smart Retro Pager phase4a"));
+  Serial.println(F("[Pager] boot Smart Retro Pager phase5a"));
 
   EEPROM.begin(EEPROM_SIZE);
   eepromBoundAtBoot_ = loadBoundStateFromEEPROM();
 
   commService_.begin();
+  messageHistory_.begin();
   Serial.print(F("[Pager] MAC "));
   Serial.println(WiFi.macAddress());
 
@@ -105,7 +107,8 @@ void PagerApp::requestPairingPinFromBackend_(const uint32_t nowMs) {
     return;
   }
 
-  if (state_ != STATE_READING) {
+  if (state_ != STATE_READING && state_ != STATE_HISTORY_READING &&
+      state_ != STATE_HISTORY_LIST) {
     state_ = STATE_PAIRING;
     uiDirty_ = true;
   }
@@ -193,6 +196,38 @@ void PagerApp::enterIdleState_() {
   uiDirty_ = true;
 }
 
+void PagerApp::enterHistoryListState_() {
+  state_ = STATE_HISTORY_LIST;
+  scrollLine_ = 0;
+  uiDirty_ = true;
+}
+
+void PagerApp::enterHistoryReadingFromList_(const int slotIndex) {
+  const String text = messageHistory_.messageAt(slotIndex);
+  messageService_.setIncomingText(text.c_str(), text.length());
+  scrollLine_ = 0;
+  TextLayoutService layoutService;
+  scrollLine_ =
+      layoutService.clampScrollLine(scrollLine_, messageService_.getLayout().maxScrollLines);
+  historyReadingSlot_ = slotIndex;
+  state_ = STATE_HISTORY_READING;
+  uiDirty_ = true;
+}
+
+void PagerApp::scrollMessageUp_() {
+  TextLayoutService layoutService;
+  const int16_t maxLines = messageService_.getLayout().maxScrollLines;
+  scrollLine_ = layoutService.clampScrollLine(scrollLine_ - SCROLL_STEP_LINES, maxLines);
+  uiDirty_ = true;
+}
+
+void PagerApp::scrollMessageDown_() {
+  TextLayoutService layoutService;
+  const int16_t maxLines = messageService_.getLayout().maxScrollLines;
+  scrollLine_ = layoutService.clampScrollLine(scrollLine_ + SCROLL_STEP_LINES, maxLines);
+  uiDirty_ = true;
+}
+
 void PagerApp::enterReadingState_(const bool playIncomingBeeps) {
   state_ = STATE_READING;
   scrollLine_ = 0;
@@ -213,18 +248,34 @@ void PagerApp::enterErrorState_() {
   uiDirty_ = true;
 }
 
+void PagerApp::handleIncomingRxMessage_(const char *msg) {
+  if (msg == nullptr) {
+    return;
+  }
+
+  String m(msg);
+  if (m.length() > static_cast<int>(HISTORY_MESSAGE_MAX_LEN)) {
+    m = m.substring(0, HISTORY_MESSAGE_MAX_LEN);
+  }
+
+  messageHistory_.addMessageToHistory(m);
+  messageService_.setIncomingText(m.c_str(), m.length());
+
+  enterReadingState_(true);
+
+  TextLayoutService layoutService;
+  scrollLine_ =
+      layoutService.clampScrollLine(scrollLine_, messageService_.getLayout().maxScrollLines);
+  uiDirty_ = true;
+}
+
 void PagerApp::applyIncomingRx_() {
   char rx[RX_MESSAGE_MAX_LEN + 1];
   if (!commService_.takeRxPayload(rx, sizeof(rx))) {
     return;
   }
 
-  messageService_.setIncomingText(rx, RX_MESSAGE_MAX_LEN);
-  enterReadingState_(true);
-  TextLayoutService layoutService;
-  scrollLine_ =
-      layoutService.clampScrollLine(scrollLine_, messageService_.getLayout().maxScrollLines);
-  uiDirty_ = true;
+  handleIncomingRxMessage_(rx);
 }
 
 void PagerApp::handleBindSuccess_(const uint32_t nowMs) {
@@ -247,6 +298,7 @@ void PagerApp::handleUnbound_(const uint32_t nowMs) {
   isBound_ = false;
   commService_.setDeviceBoundForRx(false);
   clearPin_();
+  messageHistory_.begin();
   requestPairingPinFromBackend_(nowMs);
   if (currentPin_[0] != '\0') {
     state_ = STATE_PAIRING;
@@ -272,7 +324,7 @@ void PagerApp::applySysCommands_(const uint32_t nowMs) {
 }
 
 void PagerApp::updatePairingPinLifecycle_(const uint32_t nowMs) {
-  if (isBound_ || state_ == STATE_READING) {
+  if (isBound_ || state_ == STATE_READING || state_ == STATE_HISTORY_READING) {
     return;
   }
   if (state_ != STATE_PAIRING && state_ != STATE_ERROR) {
@@ -296,8 +348,8 @@ void PagerApp::updatePairingPinLifecycle_(const uint32_t nowMs) {
 }
 
 void PagerApp::tryFactoryResetHold_(const uint32_t nowMs) {
-  const bool allow =
-      (state_ == STATE_IDLE || state_ == STATE_PAIRING || state_ == STATE_ERROR);
+  const bool allow = (state_ == STATE_IDLE || state_ == STATE_PAIRING || state_ == STATE_ERROR ||
+                      state_ == STATE_HISTORY_LIST || state_ == STATE_HISTORY_READING);
   if (!allow) {
     bothButtonsDownSinceMs_ = 0;
     return;
@@ -406,8 +458,13 @@ void PagerApp::processLogic_(const ButtonEvent event) {
         if (ENABLE_LOCAL_MOCK_MESSAGE) {
           messageService_.loadMockForLocalTest();
           enterReadingState_(true);
+        } else if (messageHistory_.count() > 0) {
+          messageHistory_.setSelectedHistoryIndex(0);
+          enterHistoryListState_();
+          Serial.println(F("[HISTORY] Open list"));
         } else {
           buzzerDriver_.startClickBeep();
+          Serial.println(F("[HISTORY] Empty"));
         }
       }
       break;
@@ -418,24 +475,55 @@ void PagerApp::processLogic_(const ButtonEvent event) {
       }
       break;
 
-    case STATE_READING: {
-      buzzerDriver_.startClickBeep();
-      TextLayoutService layoutService;
-      const int16_t maxLines = messageService_.getLayout().maxScrollLines;
-
+    case STATE_READING:
       if (event == BTN_EVENT_UP) {
-        scrollLine_ =
-            layoutService.clampScrollLine(scrollLine_ - SCROLL_STEP_LINES, maxLines);
-        uiDirty_ = true;
+        scrollMessageUp_();
+        buzzerDriver_.startClickBeep();
       } else if (event == BTN_EVENT_DOWN) {
-        scrollLine_ =
-            layoutService.clampScrollLine(scrollLine_ + SCROLL_STEP_LINES, maxLines);
-        uiDirty_ = true;
+        scrollMessageDown_();
+        buzzerDriver_.startClickBeep();
       } else if (event == BTN_EVENT_OK) {
+        buzzerDriver_.startClickBeep();
         enterIdleState_();
       }
       break;
-    }
+
+    case STATE_HISTORY_LIST:
+      if (event == BTN_EVENT_UP) {
+        messageHistory_.setSelectedHistoryIndex(messageHistory_.selectedHistoryIndex() - 1);
+        Serial.print(F("[HISTORY] Selected index="));
+        Serial.println(messageHistory_.selectedHistoryIndex());
+        buzzerDriver_.startClickBeep();
+        uiDirty_ = true;
+      } else if (event == BTN_EVENT_DOWN) {
+        messageHistory_.setSelectedHistoryIndex(messageHistory_.selectedHistoryIndex() + 1);
+        Serial.print(F("[HISTORY] Selected index="));
+        Serial.println(messageHistory_.selectedHistoryIndex());
+        buzzerDriver_.startClickBeep();
+        uiDirty_ = true;
+      } else if (event == BTN_EVENT_OK) {
+        if (messageHistory_.count() > 0) {
+          const int slot = messageHistory_.selectedHistoryIndex();
+          enterHistoryReadingFromList_(slot);
+          Serial.print(F("[HISTORY] Open message index="));
+          Serial.println(slot + 1);
+          buzzerDriver_.startClickBeep();
+        }
+      }
+      break;
+
+    case STATE_HISTORY_READING:
+      if (event == BTN_EVENT_UP) {
+        scrollMessageUp_();
+        buzzerDriver_.startClickBeep();
+      } else if (event == BTN_EVENT_DOWN) {
+        scrollMessageDown_();
+        buzzerDriver_.startClickBeep();
+      } else if (event == BTN_EVENT_OK) {
+        buzzerDriver_.startClickBeep();
+        enterIdleState_();
+      }
+      break;
   }
 }
 
@@ -470,6 +558,51 @@ PagerViewModel PagerApp::buildViewModel_(const uint32_t nowMs) {
     strncpy(viewModel.deviceIdTail, id + len - 6, sizeof(viewModel.deviceIdTail) - 1);
   } else {
     strncpy(viewModel.deviceIdTail, id, sizeof(viewModel.deviceIdTail) - 1);
+  }
+
+  const int hc = messageHistory_.count();
+  viewModel.histCount = static_cast<uint8_t>(hc < 0 ? 0 : (hc > 255 ? 255 : hc));
+  int selIdx = messageHistory_.selectedHistoryIndex();
+  if (selIdx < 0) {
+    selIdx = 0;
+  }
+  if (selIdx > 255) {
+    selIdx = 255;
+  }
+  viewModel.histSelected = static_cast<uint8_t>(selIdx);
+
+  viewModel.historyReadingMode = (state_ == STATE_HISTORY_READING);
+  if (state_ == STATE_HISTORY_READING && hc > 0) {
+    viewModel.histReadX = static_cast<uint8_t>(historyReadingSlot_ + 1);
+    viewModel.histReadY = static_cast<uint8_t>(hc > 255 ? 255 : hc);
+  } else {
+    viewModel.histReadX = 0;
+    viewModel.histReadY = 0;
+  }
+
+  memset(viewModel.histListRow0, 0, sizeof(viewModel.histListRow0));
+  memset(viewModel.histListRow1, 0, sizeof(viewModel.histListRow1));
+  memset(viewModel.histListRow2, 0, sizeof(viewModel.histListRow2));
+
+  if (state_ == STATE_HISTORY_LIST && hc > 0) {
+    const int sel = messageHistory_.selectedHistoryIndex();
+    int windowStart = sel;
+    if (hc > 3 && sel > hc - 3) {
+      windowStart = hc - 3;
+    }
+    for (int r = 0; r < 3; ++r) {
+      char *dst =
+          (r == 0) ? viewModel.histListRow0 : (r == 1) ? viewModel.histListRow1 : viewModel.histListRow2;
+      const int idx = windowStart + r;
+      if (idx >= hc) {
+        continue;
+      }
+      dst[0] = (idx == sel) ? '>' : ' ';
+      const String prev =
+          MessageHistoryStore::makeMessagePreview(messageHistory_.messageAt(idx), HISTORY_PREVIEW_MAX_LEN);
+      strncpy(dst + 1, prev.c_str(), HISTORY_LIST_ROW_BUF - 2);
+      dst[HISTORY_LIST_ROW_BUF - 1] = '\0';
+    }
   }
 
   return viewModel;

@@ -7,6 +7,7 @@
 #include "drivers/display_driver.h"
 #include "pager_types.h"
 #include "services/backend_pairing_client.h"
+#include "services/message_history.h"
 #include "services/message_service.h"
 
 class PagerApp {
@@ -21,11 +22,14 @@ class PagerApp {
   MessageService messageService_;
   CommService commService_;
   BackendPairingClient backend_;
+  MessageHistoryStore messageHistory_;
 
   SystemState state_;
   int16_t scrollLine_;
   bool uiDirty_;
   uint32_t lastDisplayUpdateMs_;
+
+  int historyReadingSlot_{0};
 
   bool eepromBoundAtBoot_;
   bool isBound_;
@@ -48,6 +52,7 @@ class PagerApp {
   bool factoryResetAwaitRelease_;
 
   void runPostWifiSequenceOnce_();
+  void handleIncomingRxMessage_(const char *msg);
   void applyIncomingRx_();
   void applySysCommands_(uint32_t nowMs);
   void updatePairingPinLifecycle_(uint32_t nowMs);
@@ -62,7 +67,12 @@ class PagerApp {
 
   void enterIdleState_();
   void enterReadingState_(bool playIncomingBeeps);
+  void enterHistoryListState_();
+  void enterHistoryReadingFromList_(int slotIndex);
   void enterErrorState_();
+
+  void scrollMessageUp_();
+  void scrollMessageDown_();
 
   void processLogic_(ButtonEvent event);
   void drawUI_(uint32_t nowMs);

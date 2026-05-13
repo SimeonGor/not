@@ -34,13 +34,21 @@ void DisplayDriver::drawStatusBar_(const __FlashStringHelper *statusText) {
   display.drawFastHLine(0, 10, SCREEN_WIDTH, SSD1306_WHITE);
 }
 
+void DisplayDriver::drawStatusBarCstr_(const char *statusText) {
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.print(statusText);
+  display.drawFastHLine(0, 10, SCREEN_WIDTH, SSD1306_WHITE);
+}
+
 void DisplayDriver::drawBootScreen_() {
   drawStatusBar_(F("BOOT"));
   display.setTextSize(1);
   display.setCursor(0, 14);
   display.println(F("Smart Pager"));
   display.setCursor(0, 28);
-  display.println(F("Phase 4A"));
+  display.println(F("Phase 5A"));
 }
 
 void DisplayDriver::drawConnectingScreen_() {
@@ -131,16 +139,23 @@ void DisplayDriver::drawIdleScreen_(const PagerViewModel &viewModel) {
   display.setCursor(64, 32);
   display.print(viewModel.isBound ? F("BND") : F("---"));
 
-  display.setCursor(0, 42);
+  display.setCursor(0, 40);
+  display.print(F("Hist:"));
+  display.print(viewModel.histCount);
+
+  display.setCursor(0, 48);
   display.print(F("ID .."));
   display.print(viewModel.deviceIdTail);
 
   if (viewModel.factoryResetErrorFlash) {
-    display.setCursor(0, 52);
+    display.setCursor(0, 56);
     display.print(F("RST: no ACK"));
   } else if (ENABLE_LOCAL_MOCK_MESSAGE) {
-    display.setCursor(0, 52);
+    display.setCursor(0, 56);
     display.print(F("OK=mock"));
+  } else {
+    display.setCursor(0, 56);
+    display.print(F("OK:History"));
   }
 }
 
@@ -149,7 +164,14 @@ void DisplayDriver::drawReadingScreen_(const PagerViewModel &viewModel) {
   display.setTextColor(SSD1306_WHITE);
 
   if (viewModel.messageLayout == nullptr) {
-    drawStatusBar_(F("READING"));
+    if (viewModel.historyReadingMode) {
+      char b[16];
+      snprintf(b, sizeof(b), "HIST %u/%u", static_cast<unsigned>(viewModel.histReadX),
+               static_cast<unsigned>(viewModel.histReadY));
+      drawStatusBarCstr_(b);
+    } else {
+      drawStatusBar_(F("READING"));
+    }
     return;
   }
 
@@ -185,7 +207,14 @@ void DisplayDriver::drawReadingScreen_(const PagerViewModel &viewModel) {
     display.print(layout.lines[lineIndex]);
   }
 
-  drawStatusBar_(F("READING"));
+  if (viewModel.historyReadingMode) {
+    char b[16];
+    snprintf(b, sizeof(b), "HIST %u/%u", static_cast<unsigned>(viewModel.histReadX),
+             static_cast<unsigned>(viewModel.histReadY));
+    drawStatusBarCstr_(b);
+  } else {
+    drawStatusBar_(F("READING"));
+  }
 
   display.fillRect(0, READING_FOOTER_TOP_Y, SCREEN_WIDTH, SCREEN_HEIGHT - READING_FOOTER_TOP_Y,
                    SSD1306_BLACK);
@@ -210,6 +239,35 @@ void DisplayDriver::drawReadingScreen_(const PagerViewModel &viewModel) {
   }
 }
 
+void DisplayDriver::drawHistoryListScreen_(const PagerViewModel &viewModel) {
+  drawStatusBar_(F("HIST"));
+
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+
+  if (viewModel.histCount == 0) {
+    display.setCursor(0, 28);
+    display.println(F("NO HISTORY"));
+    return;
+  }
+
+  char title[22];
+  snprintf(title, sizeof(title), "HISTORY %u/%u", static_cast<unsigned>(viewModel.histSelected + 1),
+           static_cast<unsigned>(viewModel.histCount));
+  display.setCursor(0, 12);
+  display.println(title);
+
+  display.setCursor(0, 22);
+  display.println(viewModel.histListRow0);
+  display.setCursor(0, 30);
+  display.println(viewModel.histListRow1);
+  display.setCursor(0, 38);
+  display.println(viewModel.histListRow2);
+
+  display.setCursor(0, 54);
+  display.print(F("OK open"));
+}
+
 void DisplayDriver::drawUI(const PagerViewModel &viewModel) {
   display.clearDisplay();
 
@@ -227,6 +285,12 @@ void DisplayDriver::drawUI(const PagerViewModel &viewModel) {
       drawIdleScreen_(viewModel);
       break;
     case STATE_READING:
+      drawReadingScreen_(viewModel);
+      break;
+    case STATE_HISTORY_LIST:
+      drawHistoryListScreen_(viewModel);
+      break;
+    case STATE_HISTORY_READING:
       drawReadingScreen_(viewModel);
       break;
     case STATE_ERROR:

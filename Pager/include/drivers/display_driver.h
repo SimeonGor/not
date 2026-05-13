@@ -9,10 +9,12 @@ class DisplayDriver {
 
  private:
   void drawStatusBar_(const __FlashStringHelper *statusText);
+  void drawStatusBarCstr_(const char *statusText);
   void drawBootScreen_();
   void drawConnectingScreen_();
   void drawPairingScreen_(const PagerViewModel &viewModel);
   void drawErrorScreen_();
   void drawIdleScreen_(const PagerViewModel &viewModel);
   void drawReadingScreen_(const PagerViewModel &viewModel);
+  void drawHistoryListScreen_(const PagerViewModel &viewModel);
 };

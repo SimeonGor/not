@@ -10,6 +10,8 @@ enum SystemState {
   STATE_PAIRING,
   STATE_IDLE,
   STATE_READING,
+  STATE_HISTORY_LIST,
+  STATE_HISTORY_READING,
   STATE_ERROR
 };
 
@@ -54,4 +56,14 @@ struct PagerViewModel {
   /** Кратко показать «привязано» после BIND_SUCCESS. */
   bool bindSuccessFlash;
   bool factoryResetErrorFlash;
+
+  /** Phase 5A: локальная история (RAM). */
+  uint8_t histCount;
+  uint8_t histSelected;
+  bool historyReadingMode;
+  uint8_t histReadX;
+  uint8_t histReadY;
+  char histListRow0[HISTORY_LIST_ROW_BUF];
+  char histListRow1[HISTORY_LIST_ROW_BUF];
+  char histListRow2[HISTORY_LIST_ROW_BUF];
 };

@@ -1,6 +1,6 @@
 # Smart Retro Pager — прошивка (ESP8266 / NodeMCU)
 
-PlatformIO-проект для NodeMCU v3 (Lolin): Wi‑Fi, MQTT, OLED SSD1306 128×64, кнопки, зуммер, **Phase 4A** — pairing по HTTP + EEPROM-кэш + топик `sys`.
+PlatformIO-проект для NodeMCU v3 (Lolin): Wi‑Fi, MQTT, OLED SSD1306 128×64, кнопки, зуммер, **Phase 4A** (pairing по HTTP + EEPROM + `sys`) и **Phase 5A** (локальная история последних rx-сообщений в RAM).
 
 ## Сборка и прошивка
 
@@ -28,6 +28,9 @@ pio device monitor  # Serial 115200
 | `ENABLE_LOCAL_MOCK_MESSAGE` | Если `true`, в IDLE кнопка OK подставляет тестовое сообщение без брокера |
 | `PIN_REFRESH_RETRY_INTERVAL_MS` | Пауза между повторными запросами PIN при ошибке backend |
 | `FACTORY_RESET_HOLD_MS` | Удержание UP+DOWN для factory reset |
+| `HISTORY_SIZE` | Сколько последних rx-сообщений хранить в RAM (5) |
+| `HISTORY_MESSAGE_MAX_LEN` | Макс. длина одного сообщения в истории (256) |
+| `HISTORY_PREVIEW_MAX_LEN` | Длина превью в списке истории на OLED (18) |
 
 ## Зависимости (PIO)
 

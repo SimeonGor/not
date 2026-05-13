@@ -53,6 +53,14 @@ static constexpr uint32_t BIND_SUCCESS_FLASH_MS = 2000;
 // В IDLE: OK подставляет mock только при true (тест без брокера)
 static constexpr bool ENABLE_LOCAL_MOCK_MESSAGE = false;
 
+static constexpr uint8_t HISTORY_SIZE = 5;
+/** Макс. длина одного сообщения в истории (совпадает с rx payload). */
+static constexpr size_t HISTORY_MESSAGE_MAX_LEN = 256;
+/** Длина превью в списке истории (символы до «...»). */
+static constexpr int HISTORY_PREVIEW_MAX_LEN = 18;
+/** Буфер одной строки списка на OLED (+ маркер и '\0'). */
+static constexpr size_t HISTORY_LIST_ROW_BUF = 24;
+
 static constexpr uint32_t NETWORK_RETRY_INTERVAL_MS = 5000;
 static constexpr uint32_t DISPLAY_UPDATE_INTERVAL_MS = 150;
 static constexpr size_t RX_MESSAGE_MAX_LEN = 256;
