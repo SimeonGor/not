@@ -9,3 +9,12 @@ mqtt:
   broker-url: tcp://mosquitto:1883
   client-id: pager-backend
   qos: 1
+
+pairing:
+  pin-ttl-seconds: 300
+  pin-length: 6
+  pin-salt: ${PAIRING_PIN_SALT:dev-salt-change-me}
+
+telegram:
+  bot-token: ${TG_BOT_TOKEN:}
+  bot-username: ${TG_BOT_USERNAME:}

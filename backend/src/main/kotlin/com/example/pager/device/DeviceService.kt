@@ -44,6 +44,8 @@ class DeviceService(
                 displayName = null,
                 createdAt = Instant.now(),
                 lastSeenAt = null,
+                user = null,
+                boundAt = null,
             )
         val saved = deviceRepository.save(created)
         log.info("[DEVICE] Auto-created device deviceId={}", saved.deviceId)

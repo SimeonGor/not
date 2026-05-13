@@ -56,6 +56,36 @@ class GlobalExceptionHandler {
         )
     }
 
+    @ExceptionHandler(AlreadyBoundException::class)
+    fun handleAlreadyBound(ex: AlreadyBoundException): ResponseEntity<ErrorResponse> =
+        ResponseEntity.status(HttpStatus.CONFLICT).body(
+            ErrorResponse(error = "ALREADY_BOUND", message = ex.message ?: "Device is already bound"),
+        )
+
+    @ExceptionHandler(DeviceBoundToAnotherUserException::class)
+    fun handleDeviceBoundToOther(ex: DeviceBoundToAnotherUserException): ResponseEntity<ErrorResponse> =
+        ResponseEntity.status(HttpStatus.CONFLICT).body(
+            ErrorResponse(error = "DEVICE_BOUND_TO_ANOTHER_USER", message = ex.message ?: "Conflict"),
+        )
+
+    @ExceptionHandler(InvalidDeviceIdException::class)
+    fun handleInvalidDeviceId(ex: InvalidDeviceIdException): ResponseEntity<ErrorResponse> =
+        ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+            ErrorResponse(error = "VALIDATION_ERROR", message = ex.message ?: "Invalid deviceId"),
+        )
+
+    @ExceptionHandler(InvalidPairingPinFormatException::class)
+    fun handleInvalidPinFormat(ex: InvalidPairingPinFormatException): ResponseEntity<ErrorResponse> =
+        ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+            ErrorResponse(error = "INVALID_PIN_FORMAT", message = ex.message ?: "Invalid PIN format"),
+        )
+
+    @ExceptionHandler(InvalidOrExpiredPairingPinException::class)
+    fun handleInvalidOrExpiredPin(ex: InvalidOrExpiredPairingPinException): ResponseEntity<ErrorResponse> =
+        ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+            ErrorResponse(error = "INVALID_OR_EXPIRED_PIN", message = ex.message ?: "Invalid or expired PIN"),
+        )
+
     @ExceptionHandler(Exception::class)
     fun handleGeneric(ex: Exception): ResponseEntity<ErrorResponse> {
         log.error("[INTERNAL] Unhandled error", ex)

@@ -1,6 +1,7 @@
 package com.example.pager.mqtt
 
 import com.example.pager.config.MqttProperties
+import com.example.pager.device.DeviceIdNormalizer
 import org.eclipse.paho.client.mqttv3.MqttClient
 import org.eclipse.paho.client.mqttv3.MqttException
 import org.eclipse.paho.client.mqttv3.MqttMessage
@@ -42,5 +43,12 @@ class MqttPublisherServiceImpl(
             if (e is MqttPublishException) throw e
             throw MqttPublishException("MQTT publish failed for topic $topic", e)
         }
+    }
+
+    override fun publishSysCommand(deviceId: String, command: String) {
+        val normalized = DeviceIdNormalizer.normalize(deviceId)
+        val topic = "pager/$normalized/sys"
+        log.info("[MQTT] Publishing sys command to {} payload={}", topic, command)
+        publish(topic, command)
     }
 }

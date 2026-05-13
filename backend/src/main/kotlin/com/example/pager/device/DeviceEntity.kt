@@ -1,8 +1,12 @@
 package com.example.pager.device
 
+import com.example.pager.user.UserEntity
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
+import jakarta.persistence.FetchType
 import jakarta.persistence.Id
+import jakarta.persistence.JoinColumn
+import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 import java.time.Instant
 import java.util.UUID
@@ -21,4 +25,9 @@ class DeviceEntity(
     var createdAt: Instant,
     @Column(name = "last_seen_at")
     var lastSeenAt: Instant? = null,
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    var user: UserEntity? = null,
+    @Column(name = "bound_at")
+    var boundAt: Instant? = null,
 )

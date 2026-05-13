@@ -1,6 +1,6 @@
-# Smart Retro Pager — Backend (Phase 3)
+# Smart Retro Pager — Backend (Phase 3–4A)
 
-Kotlin Spring Boot REST API: PostgreSQL (Flyway) + MQTT publish (Eclipse Paho) to `pager/{deviceId}/rx` as **plain text** (`Sender: text`).
+Kotlin Spring Boot REST API: PostgreSQL (Flyway) + MQTT publish (Eclipse Paho) to `pager/{deviceId}/rx` as **plain text** (`Sender: text`). **Phase 4A** adds device–Telegram pairing: REST endpoints under `/api/v1/devices/...`, PIN lifecycle (hashed in DB), MQTT **system** topic `pager/{deviceId}/sys` with payloads `BIND_SUCCESS` and `UNBOUND`, and an optional **Telegram** long-polling bot (`/bind`, `/unbind`, `/me`, …).
 
 ## Prerequisites
 
@@ -84,7 +84,48 @@ With Wi‑Fi + MQTT connected to the same broker:
 1. Send the `curl` POST above with your real `deviceId`.
 2. The device should show `Alice: Hello from Kotlin backend!` (or your text) and beep.
 
-## 7. Build and tests
+## 7. Phase 4A — Pairing (REST, MQTT sys, Telegram)
+
+### Environment variables
+
+| Variable | Purpose |
+|----------|---------|
+| `PAIRING_PIN_SALT` | Salt appended to PIN before SHA-256 (default in `application.yml` is for dev only). |
+| `TG_BOT_TOKEN` | Telegram Bot API token; if empty, the bot bean is **not** registered and a startup **WARN** explains that Telegram is disabled. |
+| `TG_BOT_USERNAME` | Optional display / docs; not required for API calls. |
+
+`docker compose` passes these through from the host when set (see repository `docker-compose.yml`).
+
+### REST: binding status, PIN, reset
+
+Use your real `deviceId` (MAC without colons, uppercase), e.g. `84F3EB12ABCD`:
+
+```bash
+# Whether the device is bound and whether pairing is required
+curl -s http://localhost:8080/api/v1/devices/84F3EB12ABCD/binding-status
+
+# Issue a new numeric PIN (409 if already bound)
+curl -s -X POST http://localhost:8080/api/v1/devices/84F3EB12ABCD/pairing-pin \
+  -H "Content-Type: application/json" -d '{}'
+
+# Clear binding from the device side (also publishes UNBOUND on sys)
+curl -s -X POST http://localhost:8080/api/v1/devices/84F3EB12ABCD/reset-binding \
+  -H "Content-Type: application/json" -d '{}'
+```
+
+### Telegram flow (`/bind`)
+
+1. On the pager, call `pairing-pin` (or your firmware equivalent) and read the **6-digit PIN** from the UI.
+2. In Telegram, send: `/bind 123456` (replace with the real PIN).
+3. On success the backend publishes **`BIND_SUCCESS`** to `pager/{deviceId}/sys` (plain text, not JSON). The firmware can subscribe to `pager/{yourDeviceId}/sys` and react (e.g. clear PIN UI, show “bound”).
+4. `/unbind` clears binding and publishes **`UNBOUND`** on the same topic.
+5. `/me` shows your Telegram id, username, and bound device id(s).
+
+### Verify MQTT `sys` on the device
+
+Subscribe (e.g. `mosquitto_sub -h <broker> -t 'pager/84F3EB12ABCD/sys' -v`) while completing `/bind` or `reset-binding`. You should see payload `BIND_SUCCESS` or `UNBOUND` as plain UTF-8 text.
+
+## 8. Build and tests
 
 ```bash
 export JAVA_HOME=$(/usr/libexec/java_home -v 17)   # if needed
@@ -104,6 +145,6 @@ Structured JSON, e.g.:
 }
 ```
 
-Codes: `VALIDATION_ERROR`, `PAYLOAD_TOO_LONG`, `MQTT_PUBLISH_ERROR`, `INTERNAL_ERROR`.
+Codes: `VALIDATION_ERROR`, `PAYLOAD_TOO_LONG`, `MQTT_PUBLISH_ERROR`, `INTERNAL_ERROR`, `ALREADY_BOUND`, `DEVICE_BOUND_TO_ANOTHER_USER`, `INVALID_PIN_FORMAT`, `INVALID_OR_EXPIRED_PIN`.
 
 If MQTT publish fails after the row is stored, `deliveredToMqtt` stays `false` and the API returns **500** with `MQTT_PUBLISH_ERROR`.

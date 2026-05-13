@@ -17,6 +17,8 @@ class UserEntity(
     var telegramId: Long? = null,
     @Column(name = "username", length = 64)
     var username: String? = null,
+    @Column(name = "first_name", length = 128)
+    var firstName: String? = null,
     @Column(name = "created_at", nullable = false)
     var createdAt: Instant,
 )

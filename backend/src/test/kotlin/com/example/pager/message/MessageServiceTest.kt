@@ -36,6 +36,8 @@ class MessageServiceTest {
             displayName = null,
             createdAt = Instant.parse("2026-05-13T12:00:00Z"),
             lastSeenAt = null,
+            user = null,
+            boundAt = null,
         )
 
     @BeforeEach

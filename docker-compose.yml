@@ -40,6 +40,9 @@ services:
         condition: service_started
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      TG_BOT_TOKEN: ${TG_BOT_TOKEN:-}
+      TG_BOT_USERNAME: ${TG_BOT_USERNAME:-}
+      PAIRING_PIN_SALT: ${PAIRING_PIN_SALT:-}
     ports:
       - "8080:8080"
 
