@@ -19,6 +19,10 @@ class UserEntity(
     var username: String? = null,
     @Column(name = "first_name", length = 128)
     var firstName: String? = null,
+    @Column(name = "last_name", length = 128)
+    var lastName: String? = null,
     @Column(name = "created_at", nullable = false)
     var createdAt: Instant,
+    @Column(name = "updated_at")
+    var updatedAt: Instant? = null,
 )

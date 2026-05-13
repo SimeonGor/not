@@ -2,6 +2,7 @@ package com.example.pager.telegram
 
 import com.example.pager.config.TelegramBotProperties
 import com.example.pager.device.DeviceBindingService
+import com.example.pager.user.TelegramUserService
 import com.pengrad.telegrambot.TelegramBot
 import com.pengrad.telegrambot.UpdatesListener
 import com.pengrad.telegrambot.model.Update
@@ -16,6 +17,8 @@ import org.springframework.stereotype.Component
 @Conditional(TelegramEnabledCondition::class)
 class PagerTelegramLongPolling(
     private val telegramBotProperties: TelegramBotProperties,
+    private val telegramUserService: TelegramUserService,
+    private val telegramBotCommandService: TelegramBotCommandService,
     private val deviceBindingService: DeviceBindingService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -42,28 +45,20 @@ class PagerTelegramLongPolling(
         }
     }
 
+    private fun stripCommandAtSuffix(text: String): String =
+        text.trim().replaceFirst(Regex("^(/[a-zA-Z0-9_]+)@[A-Za-z0-9_]+"), "$1")
+
     private fun handleUpdateSafe(update: Update) {
         val message = update.message() ?: return
         val chatId = message.chat().id()
         val from = message.from() ?: return
-        val telegramId = from.id()
-        val username = from.username()
-        val firstName = from.firstName()
-        val text = message.text()?.trim() ?: return
+        val textRaw = message.text()?.trim() ?: return
+        val text = stripCommandAtSuffix(textRaw)
 
         val reply =
             try {
-                when {
-                    text.equals("/start", ignoreCase = true) || text.equals("/help", ignoreCase = true) ->
-                        helpText()
-                    text.startsWith("/bind", ignoreCase = true) ->
-                        handleBind(text, telegramId, username, firstName)
-                    text.equals("/unbind", ignoreCase = true) ->
-                        deviceBindingService.unbindByTelegramUser(telegramId)
-                    text.equals("/me", ignoreCase = true) ->
-                        deviceBindingService.describeTelegramUser(telegramId)
-                    else -> "Неизвестная команда. Введите /help."
-                }
+                val user = telegramUserService.findOrCreateOrUpdateTelegramUser(from)
+                routeCommand(from, user, text)
             } catch (e: Exception) {
                 log.warn("[TELEGRAM] Command failed: {}", e.message, e)
                 e.message ?: "Произошла ошибка. Попробуйте позже."
@@ -72,26 +67,23 @@ class PagerTelegramLongPolling(
         bot.execute(SendMessage(chatId, reply))
     }
 
-    private fun handleBind(
+    private fun routeCommand(
+        from: com.pengrad.telegrambot.model.User,
+        user: com.example.pager.user.UserEntity,
         text: String,
-        telegramId: Long,
-        username: String?,
-        firstName: String?,
     ): String {
-        val parts = text.split(Regex("\\s+"), limit = 3)
-        if (parts.size < 2) {
-            return "Использование: /bind 123456"
+        val head = text.split(Regex("\\s+")).firstOrNull()?.lowercase() ?: return "Введите /help"
+        return when {
+            head == "/start" -> telegramBotCommandService.buildStartMessage(user)
+            head == "/help" -> telegramBotCommandService.buildHelpMessage()
+            head == "/me" -> telegramBotCommandService.buildMeMessage(user)
+            head.startsWith("/send_device") -> telegramBotCommandService.handleSendDevice(user, text)
+            head.startsWith("/send") -> telegramBotCommandService.handleSend(user, text)
+            head.startsWith("/history") -> telegramBotCommandService.handleHistory(user, text)
+            head == "/devices" -> telegramBotCommandService.handleDevices(user)
+            head.startsWith("/bind") -> telegramBotCommandService.handleBind(from, text)
+            head == "/unbind" -> deviceBindingService.unbindByTelegramUser(from.id())
+            else -> "Неизвестная команда. Введите /help."
         }
-        val pin = parts[1].trim()
-        return deviceBindingService.bindByPin(telegramId, username, firstName, pin)
     }
-
-    private fun helpText(): String =
-        """
-        Команды:
-        /bind PIN — привязать устройство по PIN с экрана пейджера
-        /unbind — отвязать устройство
-        /me — ваш Telegram ID и привязанное устройство
-        /help — это сообщение
-        """.trimIndent()
 }

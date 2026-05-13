@@ -8,6 +8,7 @@ import com.example.pager.mqtt.MqttPublisherService
 import com.example.pager.pairing.PairingCodeEntity
 import com.example.pager.pairing.PairingCodeRepository
 import com.example.pager.pairing.PinHasher
+import com.example.pager.user.TelegramUserService
 import com.example.pager.user.UserEntity
 import com.example.pager.user.UserRepository
 import io.mockk.Runs
@@ -32,6 +33,7 @@ import java.util.UUID
 class DeviceBindingServiceTest {
     private val deviceRepository = mockk<DeviceRepository>()
     private val userRepository = mockk<UserRepository>()
+    private val telegramUserService = mockk<TelegramUserService>()
     private val pairingCodeRepository = mockk<PairingCodeRepository>()
     private val pairingProperties =
         PairingProperties(
@@ -62,11 +64,12 @@ class DeviceBindingServiceTest {
 
     @BeforeEach
     fun setup() {
-        clearMocks(deviceRepository, userRepository, pairingCodeRepository, mqttPublisherService)
+        clearMocks(deviceRepository, userRepository, telegramUserService, pairingCodeRepository, mqttPublisherService)
         service =
             DeviceBindingService(
                 deviceRepository,
                 userRepository,
+                telegramUserService,
                 pairingCodeRepository,
                 pairingProperties,
                 pinHasher,
@@ -78,7 +81,7 @@ class DeviceBindingServiceTest {
 
     @Test
     fun `requestPairingPin throws when device already bound`() {
-        val user = UserEntity(UUID.randomUUID(), 99L, "alice", null, fixedInstant)
+        val user = UserEntity(UUID.randomUUID(), 99L, "alice", null, null, fixedInstant, fixedInstant)
         val bound = deviceWithBinding(user)
         every { deviceRepository.findByDeviceId(deviceId) } returns Optional.of(bound)
 
@@ -102,13 +105,16 @@ class DeviceBindingServiceTest {
             )
 
         every { pairingCodeRepository.findActiveByPinHash(hash, fixedInstant) } returns listOf(code)
-        every { userRepository.findByTelegramId(42L) } returns Optional.empty()
-        every { userRepository.save(any()) } answers { firstArg() }
+        val createdUser =
+            UserEntity(UUID.randomUUID(), 42L, "bob", "Bob", null, fixedInstant, fixedInstant)
+        every {
+            telegramUserService.findOrCreateOrUpdateTelegramUser(42L, "bob", "Bob", null)
+        } returns createdUser
         every { pairingCodeRepository.saveAndFlush(any()) } answers { firstArg() }
         every { pairingCodeRepository.markActiveCodesUsedForDevice(deviceUuid, fixedInstant) } returns 0
         every { deviceRepository.save(any()) } answers { firstArg() }
 
-        val msg = service.bindByPin(42L, "bob", "Bob", pin)
+        val msg = service.bindByPin(42L, "bob", "Bob", null, pin)
 
         assertTrue(msg.contains(deviceId))
         verify { mqttPublisherService.publishSysCommand(deviceId, "BIND_SUCCESS") }
@@ -120,7 +126,7 @@ class DeviceBindingServiceTest {
     @Test
     fun `bindByPin rejects wrong pin length`() {
         assertThrows(InvalidPairingPinFormatException::class.java) {
-            service.bindByPin(1L, null, null, "12")
+            service.bindByPin(1L, null, null, null, "12")
         }
     }
 
@@ -129,13 +135,13 @@ class DeviceBindingServiceTest {
         every { pairingCodeRepository.findActiveByPinHash(any(), fixedInstant) } returns emptyList()
 
         assertThrows(InvalidOrExpiredPairingPinException::class.java) {
-            service.bindByPin(1L, null, null, "000000")
+            service.bindByPin(1L, null, null, null, "000000")
         }
     }
 
     @Test
     fun `resetBindingByDeviceId clears user and publishes UNBOUND`() {
-        val user = UserEntity(UUID.randomUUID(), 7L, "u", null, fixedInstant)
+        val user = UserEntity(UUID.randomUUID(), 7L, "u", null, null, fixedInstant, fixedInstant)
         val bound = deviceWithBinding(user)
         every { deviceRepository.findByDeviceId(deviceId) } returns Optional.of(bound)
         every { pairingCodeRepository.markActiveCodesUsedForDevice(deviceUuid, fixedInstant) } returns 1
@@ -151,7 +157,7 @@ class DeviceBindingServiceTest {
 
     @Test
     fun `getBindingStatus reflects bound state`() {
-        val user = UserEntity(UUID.randomUUID(), 1L, "Alice", null, fixedInstant)
+        val user = UserEntity(UUID.randomUUID(), 1L, "alice", null, null, fixedInstant, fixedInstant)
         val bound = deviceWithBinding(user)
         every { deviceRepository.findByDeviceId(deviceId) } returns Optional.of(bound)
 

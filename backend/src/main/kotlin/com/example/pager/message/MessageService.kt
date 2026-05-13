@@ -5,6 +5,7 @@ import com.example.pager.device.DeviceIdNormalizer
 import com.example.pager.device.DeviceService
 import com.example.pager.message.dto.MessageResponse
 import com.example.pager.message.dto.SendMessageRequest
+import com.example.pager.message.toMessageResponse
 import com.example.pager.mqtt.MqttPublisherService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -62,14 +63,3 @@ class MessageService(
         return saved.toMessageResponse(deviceId)
     }
 }
-
-private fun MessageEntity.toMessageResponse(externalDeviceId: String) =
-    MessageResponse(
-        id = id,
-        deviceId = externalDeviceId,
-        senderName = senderName,
-        text = textContent,
-        mqttTopic = mqttTopic,
-        deliveredToMqtt = deliveredToMqtt,
-        createdAt = createdAt,
-    )

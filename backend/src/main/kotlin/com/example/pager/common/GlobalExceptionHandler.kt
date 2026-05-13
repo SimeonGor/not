@@ -86,6 +86,12 @@ class GlobalExceptionHandler {
             ErrorResponse(error = "INVALID_OR_EXPIRED_PIN", message = ex.message ?: "Invalid or expired PIN"),
         )
 
+    @ExceptionHandler(UserNotFoundException::class)
+    fun handleUserNotFound(ex: UserNotFoundException): ResponseEntity<ErrorResponse> =
+        ResponseEntity.status(HttpStatus.NOT_FOUND).body(
+            ErrorResponse(error = "USER_NOT_FOUND", message = ex.message ?: "User not found"),
+        )
+
     @ExceptionHandler(Exception::class)
     fun handleGeneric(ex: Exception): ResponseEntity<ErrorResponse> {
         log.error("[INTERNAL] Unhandled error", ex)

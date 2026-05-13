@@ -1,9 +1,9 @@
 package com.example.pager.device
 
 import com.example.pager.device.dto.DeviceResponse
-import com.example.pager.message.MessageEntity
 import com.example.pager.message.MessageRepository
 import com.example.pager.message.dto.MessageResponse
+import com.example.pager.message.toMessageResponse
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -60,15 +60,4 @@ private fun DeviceEntity.toDeviceResponse() =
         displayName = displayName,
         createdAt = createdAt,
         lastSeenAt = lastSeenAt,
-    )
-
-private fun MessageEntity.toMessageResponse(externalDeviceId: String) =
-    MessageResponse(
-        id = id,
-        deviceId = externalDeviceId,
-        senderName = senderName,
-        text = textContent,
-        mqttTopic = mqttTopic,
-        deliveredToMqtt = deliveredToMqtt,
-        createdAt = createdAt,
     )

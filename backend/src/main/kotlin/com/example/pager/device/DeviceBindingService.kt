@@ -13,7 +13,7 @@ import com.example.pager.mqtt.MqttPublisherService
 import com.example.pager.pairing.PairingCodeEntity
 import com.example.pager.pairing.PairingCodeRepository
 import com.example.pager.pairing.PinHasher
-import com.example.pager.user.UserEntity
+import com.example.pager.user.TelegramUserService
 import com.example.pager.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -28,6 +28,7 @@ import java.util.UUID
 class DeviceBindingService(
     private val deviceRepository: DeviceRepository,
     private val userRepository: UserRepository,
+    private val telegramUserService: TelegramUserService,
     private val pairingCodeRepository: PairingCodeRepository,
     private val pairingProperties: PairingProperties,
     private val pinHasher: PinHasher,
@@ -94,6 +95,7 @@ class DeviceBindingService(
         telegramId: Long,
         username: String?,
         firstName: String?,
+        lastName: String?,
         pin: String,
     ): String {
         validatePinFormat(pin)
@@ -126,7 +128,13 @@ class DeviceBindingService(
             }
         }
 
-        val user = findOrCreateTelegramUser(telegramId, username, firstName)
+        val user =
+            telegramUserService.findOrCreateOrUpdateTelegramUser(
+                telegramId = telegramId,
+                rawUsername = username,
+                firstName = firstName,
+                lastName = lastName,
+            )
 
         code.usedAt = now
         pairingCodeRepository.saveAndFlush(code)
@@ -185,22 +193,6 @@ class DeviceBindingService(
         )
     }
 
-    fun describeTelegramUser(telegramId: Long): String {
-        val user = userRepository.findByTelegramId(telegramId).orElse(null)
-        val devices = if (user != null) deviceRepository.findAllByUser(user) else emptyList()
-        val boundLine =
-            when {
-                devices.isEmpty() -> "Bound device: none"
-                devices.size == 1 -> "Bound device: ${devices.first().deviceId}"
-                else -> "Bound devices: " + devices.joinToString(", ") { it.deviceId }
-            }
-        return buildString {
-            appendLine("Telegram ID: $telegramId")
-            appendLine("Username: ${user?.username ?: "none"}")
-            appendLine(boundLine)
-        }.trimEnd()
-    }
-
     private fun normalizeDeviceIdOrThrow(raw: String): String {
         val normalized = DeviceIdNormalizer.normalize(raw)
         if (!DeviceIdNormalizer.isValid(normalized)) {
@@ -225,29 +217,6 @@ class DeviceBindingService(
                 boundAt = null,
             )
         return deviceRepository.save(created)
-    }
-
-    private fun findOrCreateTelegramUser(
-        telegramId: Long,
-        username: String?,
-        firstName: String?,
-    ): UserEntity {
-        val existing = userRepository.findByTelegramId(telegramId)
-        if (existing.isPresent) {
-            val u = existing.get()
-            u.username = username
-            u.firstName = firstName
-            return userRepository.save(u)
-        }
-        val u =
-            UserEntity(
-                id = UUID.randomUUID(),
-                telegramId = telegramId,
-                username = username,
-                firstName = firstName,
-                createdAt = clock.instant(),
-            )
-        return userRepository.save(u)
     }
 
     private fun validatePinFormat(pin: String) {

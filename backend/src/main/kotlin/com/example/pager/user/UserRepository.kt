@@ -6,4 +6,6 @@ import java.util.UUID
 
 interface UserRepository : JpaRepository<UserEntity, UUID> {
     fun findByTelegramId(telegramId: Long): Optional<UserEntity>
+
+    fun findByUsername(username: String): Optional<UserEntity>
 }

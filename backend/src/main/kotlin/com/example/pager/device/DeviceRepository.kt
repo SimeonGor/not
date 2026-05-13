@@ -11,4 +11,8 @@ interface DeviceRepository : JpaRepository<DeviceEntity, UUID> {
     fun findAllByOrderByCreatedAtDesc(): List<DeviceEntity>
 
     fun findAllByUser(user: UserEntity): List<DeviceEntity>
+
+    fun findAllByUser_Id(userId: UUID): List<DeviceEntity>
+
+    fun findFirstByUser_IdOrderByBoundAtDesc(userId: UUID): Optional<DeviceEntity>
 }

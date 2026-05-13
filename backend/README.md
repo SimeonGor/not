@@ -1,6 +1,6 @@
-# Smart Retro Pager — Backend (Phase 3–4A)
+# Smart Retro Pager — Backend (Phase 3–4B)
 
-Kotlin Spring Boot REST API: PostgreSQL (Flyway) + MQTT publish (Eclipse Paho) to `pager/{deviceId}/rx` as **plain text** (`Sender: text`). **Phase 4A** adds device–Telegram pairing: REST endpoints under `/api/v1/devices/...`, PIN lifecycle (hashed in DB), MQTT **system** topic `pager/{deviceId}/sys` with payloads `BIND_SUCCESS` and `UNBOUND`, and an optional **Telegram** long-polling bot (`/bind`, `/unbind`, `/me`, …).
+Kotlin Spring Boot REST API: PostgreSQL (Flyway) + MQTT publish (Eclipse Paho) to `pager/{deviceId}/rx` as **plain text** (`Sender: text`). **Phase 4A** adds device–Telegram pairing (`/bind`, `/unbind`, PIN, MQTT `pager/{deviceId}/sys`). **Phase 4B** adds **Telegram messaging without a sender pager**: `/send`, `/send_device`, `/history`, `/devices`, user profile REST, and a **static Web UI** at `http://localhost:8080/` (no auth).
 
 ## Prerequisites
 
@@ -119,13 +119,53 @@ curl -s -X POST http://localhost:8080/api/v1/devices/84F3EB12ABCD/reset-binding 
 2. In Telegram, send: `/bind 123456` (replace with the real PIN).
 3. On success the backend publishes **`BIND_SUCCESS`** to `pager/{deviceId}/sys` (plain text, not JSON). The firmware can subscribe to `pager/{yourDeviceId}/sys` and react (e.g. clear PIN UI, show “bound”).
 4. `/unbind` clears binding and publishes **`UNBOUND`** on the same topic.
-5. `/me` shows your Telegram id, username, and bound device id(s).
+5. `/me` shows your Telegram id, username, bound devices, and reminds you that you can **send to others without your own pager** (Phase 4B).
 
 ### Verify MQTT `sys` on the device
 
 Subscribe (e.g. `mosquitto_sub -h <broker> -t 'pager/84F3EB12ABCD/sys' -v`) while completing `/bind` or `reset-binding`. You should see payload `BIND_SUCCESS` or `UNBOUND` as plain UTF-8 text.
 
-## 8. Build and tests
+## 8. Phase 4B — Telegram messaging + Web UI
+
+### Rules
+
+- **Sender** does **not** need a bound device; every command registers/updates the Telegram user in `users` (username stored **lowercase**, without `@`).
+- **Receiver** (for `/send username …`) must exist in the DB **with a username** and have **at least one bound** device; the first bound device (by `bound_at` desc) receives the MQTT message.
+- All sends go through **`MessageService`** → topic `pager/{deviceId}/rx`, payload `senderName: text`.
+
+### Telegram commands (in addition to 4A)
+
+| Command | Purpose |
+|---------|---------|
+| `/send username текст` | Message to another user’s pager (your pager not required). |
+| `/send_device deviceId текст` | Direct send to a device id (lab / debug). |
+| `/history` or `/history 10` | Last messages **to your** bound device(s); default 5, max 20. |
+| `/devices` | List your bound devices and `bound_at`. |
+| `/start`, `/help`, `/me` | Welcome / help / profile (see bot texts for username warnings). |
+
+Examples:
+
+```text
+/send bob Привет с телеграма!
+/send_device 84F3EB12ABCD Тест напрямую
+/history 10
+```
+
+### REST — user profile and history (Web UI uses this)
+
+```bash
+curl -s http://localhost:8080/api/v1/users/bob
+curl -s 'http://localhost:8080/api/v1/users/bob/messages?limit=20'
+```
+
+- `username` in the path is normalized like Telegram (`@Bob` → `bob`). Unknown user → **404** `USER_NOT_FOUND`.
+- Messages: all devices bound to that user, newest first; `limit` default **20**, max **100**. Empty list if the user has no devices.
+
+### Web UI (static)
+
+With the backend running, open **`http://localhost:8080/`** in a browser. Load profile + message history by **username**, and use the form to **`POST /api/v1/messages`** (deviceId + senderName + text) for a quick test send.
+
+## 9. Build and tests
 
 ```bash
 export JAVA_HOME=$(/usr/libexec/java_home -v 17)   # if needed
@@ -145,6 +185,6 @@ Structured JSON, e.g.:
 }
 ```
 
-Codes: `VALIDATION_ERROR`, `PAYLOAD_TOO_LONG`, `MQTT_PUBLISH_ERROR`, `INTERNAL_ERROR`, `ALREADY_BOUND`, `DEVICE_BOUND_TO_ANOTHER_USER`, `INVALID_PIN_FORMAT`, `INVALID_OR_EXPIRED_PIN`.
+Codes: `VALIDATION_ERROR`, `PAYLOAD_TOO_LONG`, `MQTT_PUBLISH_ERROR`, `INTERNAL_ERROR`, `USER_NOT_FOUND`, `ALREADY_BOUND`, `DEVICE_BOUND_TO_ANOTHER_USER`, `INVALID_PIN_FORMAT`, `INVALID_OR_EXPIRED_PIN`.
 
 If MQTT publish fails after the row is stored, `deliveredToMqtt` stays `false` and the API returns **500** with `MQTT_PUBLISH_ERROR`.
