@@ -20,11 +20,32 @@ void skipSpacesRam(const char *text, uint16_t &index) {
     index++;
   }
 }
+
+// Дописать слово в текущую строку: при lineLen>0 перед словом — один пробел (если помещается).
+template <typename ReadChar>
+static bool tryAppendWordWithSpace(TextLayout &layout, uint8_t &lineLen, uint16_t wordStart,
+                                   uint8_t wordLen, ReadChar readChar) {
+  const uint8_t sep = (lineLen > 0) ? 1u : 0u;
+  if (lineLen + sep + wordLen > LINE_CHAR_CAPACITY) {
+    return false;
+  }
+  if (sep != 0) {
+    layout.lines[layout.lineCount][lineLen++] = ' ';
+  }
+  for (uint8_t i = 0; i < wordLen; i++) {
+    layout.lines[layout.lineCount][lineLen++] = readChar(static_cast<uint16_t>(wordStart + i));
+  }
+  return true;
+}
 }  // namespace
 
 TextLayout TextLayoutService::wrapProgmemText(const char *textFromProgmem) {
   TextLayout layout = {};
   uint16_t index = 0;
+
+  auto readPgm = [textFromProgmem](const uint16_t i) {
+    return static_cast<char>(pgm_read_byte(textFromProgmem + i));
+  };
 
   while (layout.lineCount < MAX_WRAPPED_LINES) {
     skipSpacesPGM(textFromProgmem, index);
@@ -44,11 +65,7 @@ TextLayout TextLayoutService::wrapProgmemText(const char *textFromProgmem) {
 
       if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
         if (wordLen > 0) {
-          if (lineLen == 0 || lineLen + wordLen <= LINE_CHAR_CAPACITY) {
-            for (uint8_t i = 0; i < wordLen; i++) {
-              layout.lines[layout.lineCount][lineLen++] =
-                  static_cast<char>(pgm_read_byte(textFromProgmem + wordStart + i));
-            }
+          if (tryAppendWordWithSpace(layout, lineLen, wordStart, wordLen, readPgm)) {
             index = wordStart + wordLen;
             wordStart = index;
             wordLen = 0;
@@ -69,8 +86,7 @@ TextLayout TextLayoutService::wrapProgmemText(const char *textFromProgmem) {
 
       if (wordLen > LINE_CHAR_CAPACITY) {
         for (uint8_t i = 0; i < LINE_CHAR_CAPACITY; i++) {
-          layout.lines[layout.lineCount][i] =
-              static_cast<char>(pgm_read_byte(textFromProgmem + index - wordLen + i));
+          layout.lines[layout.lineCount][i] = readPgm(static_cast<uint16_t>(index - wordLen + i));
         }
         lineLen = LINE_CHAR_CAPACITY;
         index = wordStart + wordLen;
@@ -78,14 +94,25 @@ TextLayout TextLayoutService::wrapProgmemText(const char *textFromProgmem) {
       }
     }
 
-    if (lineLen == 0 && wordLen > 0) {
-      const uint8_t copyLen = min(wordLen, LINE_CHAR_CAPACITY);
-      for (uint8_t i = 0; i < copyLen; i++) {
-        layout.lines[layout.lineCount][i] =
-            static_cast<char>(pgm_read_byte(textFromProgmem + wordStart + i));
+    if (wordLen > 0) {
+      const uint8_t sep = (lineLen > 0) ? 1u : 0u;
+      if (lineLen + sep + wordLen <= LINE_CHAR_CAPACITY) {
+        if (sep != 0) {
+          layout.lines[layout.lineCount][lineLen++] = ' ';
+        }
+        for (uint8_t i = 0; i < wordLen; i++) {
+          layout.lines[layout.lineCount][lineLen++] = readPgm(static_cast<uint16_t>(wordStart + i));
+        }
+        index = wordStart + wordLen;
+      } else if (lineLen > 0) {
+        index = wordStart;
+      } else {
+        const uint8_t copyLen = min(wordLen, LINE_CHAR_CAPACITY);
+        for (uint8_t i = 0; i < copyLen; i++) {
+          layout.lines[layout.lineCount][lineLen++] = readPgm(static_cast<uint16_t>(wordStart + i));
+        }
+        index = wordStart + copyLen;
       }
-      lineLen = copyLen;
-      index = wordStart + wordLen;
     }
 
     if (lineLen == 0) {
@@ -97,7 +124,7 @@ TextLayout TextLayoutService::wrapProgmemText(const char *textFromProgmem) {
   }
 
   const int32_t totalContentHeight = static_cast<int32_t>(layout.lineCount) * LINE_HEIGHT;
-  const int32_t maxScroll = totalContentHeight - CONTENT_VIEW_HEIGHT;
+  const int32_t maxScroll = totalContentHeight - MESSAGE_SCROLL_VIEW_HEIGHT;
   layout.maxScrollOffset = (maxScroll > 0) ? static_cast<int16_t>(maxScroll) : 0;
   return layout;
 }
@@ -113,6 +140,8 @@ TextLayout TextLayoutService::wrapRamText(const char *textFromRam) {
   }
 
   uint16_t index = 0;
+
+  auto readRam = [textFromRam](const uint16_t i) { return textFromRam[i]; };
 
   while (layout.lineCount < MAX_WRAPPED_LINES) {
     skipSpacesRam(textFromRam, index);
@@ -132,10 +161,7 @@ TextLayout TextLayoutService::wrapRamText(const char *textFromRam) {
 
       if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
         if (wordLen > 0) {
-          if (lineLen == 0 || lineLen + wordLen <= LINE_CHAR_CAPACITY) {
-            for (uint8_t i = 0; i < wordLen; i++) {
-              layout.lines[layout.lineCount][lineLen++] = textFromRam[wordStart + i];
-            }
+          if (tryAppendWordWithSpace(layout, lineLen, wordStart, wordLen, readRam)) {
             index = wordStart + wordLen;
             wordStart = index;
             wordLen = 0;
@@ -156,7 +182,7 @@ TextLayout TextLayoutService::wrapRamText(const char *textFromRam) {
 
       if (wordLen > LINE_CHAR_CAPACITY) {
         for (uint8_t i = 0; i < LINE_CHAR_CAPACITY; i++) {
-          layout.lines[layout.lineCount][i] = textFromRam[index - wordLen + i];
+          layout.lines[layout.lineCount][i] = readRam(static_cast<uint16_t>(index - wordLen + i));
         }
         lineLen = LINE_CHAR_CAPACITY;
         index = wordStart + wordLen;
@@ -164,13 +190,25 @@ TextLayout TextLayoutService::wrapRamText(const char *textFromRam) {
       }
     }
 
-    if (lineLen == 0 && wordLen > 0) {
-      const uint8_t copyLen = min(wordLen, LINE_CHAR_CAPACITY);
-      for (uint8_t i = 0; i < copyLen; i++) {
-        layout.lines[layout.lineCount][i] = textFromRam[wordStart + i];
+    if (wordLen > 0) {
+      const uint8_t sep = (lineLen > 0) ? 1u : 0u;
+      if (lineLen + sep + wordLen <= LINE_CHAR_CAPACITY) {
+        if (sep != 0) {
+          layout.lines[layout.lineCount][lineLen++] = ' ';
+        }
+        for (uint8_t i = 0; i < wordLen; i++) {
+          layout.lines[layout.lineCount][lineLen++] = readRam(static_cast<uint16_t>(wordStart + i));
+        }
+        index = wordStart + wordLen;
+      } else if (lineLen > 0) {
+        index = wordStart;
+      } else {
+        const uint8_t copyLen = min(wordLen, LINE_CHAR_CAPACITY);
+        for (uint8_t i = 0; i < copyLen; i++) {
+          layout.lines[layout.lineCount][lineLen++] = readRam(static_cast<uint16_t>(wordStart + i));
+        }
+        index = wordStart + copyLen;
       }
-      lineLen = copyLen;
-      index = wordStart + wordLen;
     }
 
     if (lineLen == 0) {
@@ -188,7 +226,7 @@ TextLayout TextLayoutService::wrapRamText(const char *textFromRam) {
   }
 
   const int32_t totalContentHeight = static_cast<int32_t>(layout.lineCount) * LINE_HEIGHT;
-  const int32_t maxScroll = totalContentHeight - CONTENT_VIEW_HEIGHT;
+  const int32_t maxScroll = totalContentHeight - MESSAGE_SCROLL_VIEW_HEIGHT;
   layout.maxScrollOffset = (maxScroll > 0) ? static_cast<int16_t>(maxScroll) : 0;
   return layout;
 }

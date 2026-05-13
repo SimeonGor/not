@@ -85,12 +85,11 @@ void DisplayDriver::drawIdleScreen_(const PagerViewModel &viewModel) {
 }
 
 void DisplayDriver::drawReadingScreen_(const PagerViewModel &viewModel) {
-  drawStatusBar_(F("READING"));
-
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
 
   if (viewModel.messageLayout == nullptr) {
+    drawStatusBar_(F("READING"));
     return;
   }
 
@@ -99,7 +98,12 @@ void DisplayDriver::drawReadingScreen_(const PagerViewModel &viewModel) {
     const int16_t lineY =
         CONTENT_TOP_Y + static_cast<int16_t>(lineIndex) * LINE_HEIGHT - viewModel.scrollOffset;
 
-    if (lineY < CONTENT_TOP_Y - LINE_HEIGHT) {
+    // Не рисуем в зоне статус-бара (y < CONTENT_TOP_Y), иначе при прокрутке текст наезжает на «READING».
+    if (lineY < CONTENT_TOP_Y) {
+      continue;
+    }
+    // Не заходим на полосу счётчика / подсказки внизу экрана
+    if (lineY + LINE_HEIGHT > READING_FOOTER_TOP_Y) {
       continue;
     }
     if (lineY > SCREEN_HEIGHT) {
@@ -110,13 +114,20 @@ void DisplayDriver::drawReadingScreen_(const PagerViewModel &viewModel) {
     display.print(layout.lines[lineIndex]);
   }
 
+  drawStatusBar_(F("READING"));
+
+  display.fillRect(0, READING_FOOTER_TOP_Y, SCREEN_WIDTH, SCREEN_HEIGHT - READING_FOOTER_TOP_Y,
+                   SSD1306_BLACK);
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+
   if (layout.maxScrollOffset > 0) {
-    display.setCursor(96, 56);
+    display.setCursor(96, READING_FOOTER_TOP_Y);
     display.print(viewModel.scrollOffset);
     display.print(F("/"));
     display.print(layout.maxScrollOffset);
   } else {
-    display.setCursor(0, 56);
+    display.setCursor(0, READING_FOOTER_TOP_Y);
     display.print(F("OK=close"));
   }
 }

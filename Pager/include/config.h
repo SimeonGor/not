@@ -20,6 +20,10 @@ static const uint8_t OLED_I2C_ADDRESS = 0x3C;
 static const uint8_t LINE_HEIGHT = 8;
 static const int16_t CONTENT_TOP_Y = 15;
 static const int16_t CONTENT_VIEW_HEIGHT = SCREEN_HEIGHT - CONTENT_TOP_Y;
+// В READING с y=56 — полоса счётчика/подсказки; текст не заходит ниже
+static const int16_t READING_FOOTER_TOP_Y = 56;
+// Высота области прокрутки текста (для maxScrollOffset в TextLayoutService)
+static const int16_t MESSAGE_SCROLL_VIEW_HEIGHT = READING_FOOTER_TOP_Y - CONTENT_TOP_Y;
 static const int16_t SCROLL_STEP_PX = 8;
 static const uint8_t MAX_WRAPPED_LINES = 32;
 static const uint8_t LINE_CHAR_CAPACITY = 21;
