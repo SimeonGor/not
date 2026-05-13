@@ -1,0 +1,31 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: smart-retro-pager-backend
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/pager_db
+    username: pager_user
+    password: pager_password
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+mqtt:
+  broker-url: tcp://localhost:1883
+  client-id: pager-backend
+  qos: 1
