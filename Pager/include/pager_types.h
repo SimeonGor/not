@@ -26,14 +26,16 @@ enum NetworkStatus {
 struct TextLayout {
   char lines[MAX_WRAPPED_LINES][LINE_CHAR_CAPACITY + 1];
   uint8_t lineCount;
-  int16_t maxScrollOffset;
+  /** Максимальный индекс прокрутки в строках (0 = верх текста). */
+  int16_t maxScrollLines;
 };
 
 struct PagerViewModel {
   SystemState state;
   NetworkStatus networkStatus;
   uint16_t pairingPin;
-  int16_t scrollOffset;
+  /** Прокрутка текста в целых строках (высота строки = LINE_HEIGHT px). */
+  int16_t scrollLine;
   const TextLayout *messageLayout;
   char deviceId[13];
   bool wifiConnected;

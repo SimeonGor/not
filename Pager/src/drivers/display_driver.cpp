@@ -4,6 +4,7 @@
 #include <Adafruit_SSD1306.h>
 #include <Wire.h>
 
+#include <cstdio>
 #include <cstring>
 
 #include "config.h"
@@ -94,9 +95,22 @@ void DisplayDriver::drawReadingScreen_(const PagerViewModel &viewModel) {
   }
 
   const TextLayout &layout = *viewModel.messageLayout;
+
+  const int32_t totalContentPx =
+      static_cast<int32_t>(layout.lineCount) * static_cast<int32_t>(LINE_HEIGHT);
+  const int32_t maxScrollPx = totalContentPx - static_cast<int32_t>(MESSAGE_SCROLL_VIEW_HEIGHT);
+  int32_t scrollPx = static_cast<int32_t>(viewModel.scrollLine) * static_cast<int32_t>(LINE_HEIGHT);
+  if (maxScrollPx > 0 && scrollPx > maxScrollPx) {
+    scrollPx = maxScrollPx;
+  }
+  if (scrollPx < 0) {
+    scrollPx = 0;
+  }
+  const int16_t scrollOffsetPx = static_cast<int16_t>(scrollPx);
+
   for (uint8_t lineIndex = 0; lineIndex < layout.lineCount; lineIndex++) {
     const int16_t lineY =
-        CONTENT_TOP_Y + static_cast<int16_t>(lineIndex) * LINE_HEIGHT - viewModel.scrollOffset;
+        CONTENT_TOP_Y + static_cast<int16_t>(lineIndex) * LINE_HEIGHT - scrollOffsetPx;
 
     // Не рисуем в зоне статус-бара (y < CONTENT_TOP_Y), иначе при прокрутке текст наезжает на «READING».
     if (lineY < CONTENT_TOP_Y) {
@@ -121,11 +135,19 @@ void DisplayDriver::drawReadingScreen_(const PagerViewModel &viewModel) {
   display.setTextColor(SSD1306_WHITE);
   display.setTextSize(1);
 
-  if (layout.maxScrollOffset > 0) {
-    display.setCursor(96, READING_FOOTER_TOP_Y);
-    display.print(viewModel.scrollOffset);
-    display.print(F("/"));
-    display.print(layout.maxScrollOffset);
+  if (layout.maxScrollLines > 0) {
+    char scrollBuf[20];
+    snprintf(scrollBuf, sizeof(scrollBuf), "%d/%d", static_cast<int>(viewModel.scrollLine),
+             static_cast<int>(layout.maxScrollLines));
+    // Шрифт size 1: ~6 px на символ; выравниваем вправо
+    const size_t slen = strlen(scrollBuf);
+    const int16_t charPx = 6;
+    int16_t x = static_cast<int16_t>(SCREEN_WIDTH - static_cast<int>(slen) * charPx);
+    if (x < 0) {
+      x = 0;
+    }
+    display.setCursor(x, READING_FOOTER_TOP_Y);
+    display.print(scrollBuf);
   } else {
     display.setCursor(0, READING_FOOTER_TOP_Y);
     display.print(F("OK=close"));

@@ -21,7 +21,7 @@ class PagerApp {
 
   SystemState state_;
   uint16_t pairingPin_;
-  int16_t scrollOffset_;
+  int16_t scrollLine_;
   bool uiDirty_;
   uint32_t lastDisplayUpdateMs_;
 

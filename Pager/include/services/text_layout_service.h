@@ -6,5 +6,5 @@ class TextLayoutService {
  public:
   TextLayout wrapProgmemText(const char *textFromProgmem);
   TextLayout wrapRamText(const char *textFromRam);
-  int16_t clampScrollOffset(int16_t scrollOffset, int16_t maxScrollOffset) const;
+  int16_t clampScrollLine(int16_t scrollLine, int16_t maxScrollLines) const;
 };

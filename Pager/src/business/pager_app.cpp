@@ -45,10 +45,10 @@ void PagerApp::applyIncomingMqtt_() {
 
   messageService_.setIncomingText(rx, RX_MESSAGE_MAX_LEN);
   state_ = STATE_READING;
-  scrollOffset_ = 0;
+  scrollLine_ = 0;
   TextLayoutService layoutService;
-  scrollOffset_ =
-      layoutService.clampScrollOffset(scrollOffset_, messageService_.getLayout().maxScrollOffset);
+  scrollLine_ =
+      layoutService.clampScrollLine(scrollLine_, messageService_.getLayout().maxScrollLines);
   buzzerDriver_.startIncomingBeep();
   uiDirty_ = true;
 }
@@ -72,23 +72,23 @@ void PagerApp::loop() {
 void PagerApp::enterPairingState_() {
   state_ = STATE_PAIRING;
   pairingPin_ = static_cast<uint16_t>(random(1000, 10000));
-  scrollOffset_ = 0;
+  scrollLine_ = 0;
   uiDirty_ = true;
 }
 
 void PagerApp::enterIdleState_() {
   state_ = STATE_IDLE;
-  scrollOffset_ = 0;
+  scrollLine_ = 0;
   uiDirty_ = true;
 }
 
 void PagerApp::enterReadingState_(const bool playIncomingBeeps) {
   state_ = STATE_READING;
-  scrollOffset_ = 0;
+  scrollLine_ = 0;
 
   TextLayoutService layoutService;
-  scrollOffset_ = layoutService.clampScrollOffset(
-      scrollOffset_, messageService_.getLayout().maxScrollOffset);
+  scrollLine_ = layoutService.clampScrollLine(
+      scrollLine_, messageService_.getLayout().maxScrollLines);
   uiDirty_ = true;
 
   if (playIncomingBeeps) {
@@ -123,13 +123,15 @@ void PagerApp::processLogic_(const ButtonEvent event) {
     case STATE_READING: {
       buzzerDriver_.startClickBeep();
       TextLayoutService layoutService;
-      const int16_t maxScroll = messageService_.getLayout().maxScrollOffset;
+      const int16_t maxLines = messageService_.getLayout().maxScrollLines;
 
       if (event == BTN_EVENT_UP) {
-        scrollOffset_ = layoutService.clampScrollOffset(scrollOffset_ - SCROLL_STEP_PX, maxScroll);
+        scrollLine_ =
+            layoutService.clampScrollLine(scrollLine_ - SCROLL_STEP_LINES, maxLines);
         uiDirty_ = true;
       } else if (event == BTN_EVENT_DOWN) {
-        scrollOffset_ = layoutService.clampScrollOffset(scrollOffset_ + SCROLL_STEP_PX, maxScroll);
+        scrollLine_ =
+            layoutService.clampScrollLine(scrollLine_ + SCROLL_STEP_LINES, maxLines);
         uiDirty_ = true;
       } else if (event == BTN_EVENT_OK) {
         enterIdleState_();
@@ -144,7 +146,7 @@ PagerViewModel PagerApp::buildViewModel_() {
   viewModel.state = state_;
   viewModel.networkStatus = commService_.getStatus();
   viewModel.pairingPin = pairingPin_;
-  viewModel.scrollOffset = scrollOffset_;
+  viewModel.scrollLine = scrollLine_;
   viewModel.messageLayout = &messageService_.getLayout();
   viewModel.wifiConnected = commService_.isWifiConnected();
   viewModel.mqttConnected = commService_.isMqttConnected();
