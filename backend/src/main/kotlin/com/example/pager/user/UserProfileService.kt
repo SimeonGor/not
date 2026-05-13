@@ -10,6 +10,7 @@ import com.example.pager.user.dto.UserProfileResponse
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.util.UUID
 
 @Service
 class UserProfileService(
@@ -35,6 +36,37 @@ class UserProfileService(
                     UserDevicePublicDto(deviceId = d.deviceId, boundAt = d.boundAt)
                 },
         )
+    }
+
+    @Transactional(readOnly = true)
+    fun getProfileByUserId(userId: UUID): UserProfileResponse {
+        val user = userRepository.findById(userId).orElseThrow { UserNotFoundException("User not found") }
+        val devices = deviceRepository.findAllByUser_Id(userId)
+        return UserProfileResponse(
+            telegramId = user.telegramId,
+            username = user.username ?: "",
+            firstName = user.firstName,
+            lastName = user.lastName,
+            devices =
+                devices.map { d ->
+                    UserDevicePublicDto(deviceId = d.deviceId, boundAt = d.boundAt)
+                },
+        )
+    }
+
+    @Transactional(readOnly = true)
+    fun listMessagesForUserId(
+        userId: UUID,
+        limit: Int,
+    ): List<MessageResponse> {
+        val devices = deviceRepository.findAllByUser_Id(userId)
+        if (devices.isEmpty()) {
+            return emptyList()
+        }
+        val page = PageRequest.of(0, limit.coerceIn(1, 100))
+        return messageRepository.findByDeviceInOrderByCreatedAtDesc(devices, page).map { entity ->
+            entity.toMessageResponse(entity.device.deviceId)
+        }
     }
 
     @Transactional(readOnly = true)

@@ -58,6 +58,35 @@ body {
   align-items: center;
 }
 
+.row.between {
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.session {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--dim);
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--dim);
+  margin-top: 0;
+}
+
+.details-demo {
+  margin-top: 1.25rem;
+  font-size: 0.8rem;
+  color: var(--dim);
+}
+
+.details-demo summary {
+  cursor: pointer;
+  color: var(--fg);
+}
+
 label {
   font-size: 0.8rem;
   color: var(--dim);

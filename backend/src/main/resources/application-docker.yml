@@ -18,3 +18,10 @@ pairing:
 telegram:
   bot-token: ${TG_BOT_TOKEN:}
   bot-username: ${TG_BOT_USERNAME:}
+
+web-auth:
+  code-ttl-seconds: 300
+  code-length: 6
+  code-salt: ${WEB_AUTH_CODE_SALT:dev-web-auth-salt-change-me}
+  jwt-secret: ${WEB_AUTH_JWT_SECRET:dev-jwt-secret-change-me-min-32-chars!!}
+  jwt-ttl-seconds: 3600

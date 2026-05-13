@@ -17,19 +17,17 @@ import org.springframework.stereotype.Component
 @Conditional(TelegramEnabledCondition::class)
 class PagerTelegramLongPolling(
     private val telegramBotProperties: TelegramBotProperties,
+    private val telegramBot: TelegramBot,
     private val telegramUserService: TelegramUserService,
     private val telegramBotCommandService: TelegramBotCommandService,
     private val deviceBindingService: DeviceBindingService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
-    private lateinit var bot: TelegramBot
 
     @PostConstruct
     fun start() {
-        val token = telegramBotProperties.botToken.trim()
         log.info("[TELEGRAM] Starting long polling (botUsername={})", telegramBotProperties.botUsername)
-        bot = TelegramBot(token)
-        bot.setUpdatesListener { updates ->
+        telegramBot.setUpdatesListener { updates ->
             for (update in updates) {
                 handleUpdateSafe(update)
             }
@@ -39,10 +37,8 @@ class PagerTelegramLongPolling(
 
     @PreDestroy
     fun stop() {
-        if (::bot.isInitialized) {
-            bot.removeGetUpdatesListener()
-            log.info("[TELEGRAM] Long polling stopped")
-        }
+        telegramBot.removeGetUpdatesListener()
+        log.info("[TELEGRAM] Long polling stopped")
     }
 
     private fun stripCommandAtSuffix(text: String): String =
@@ -64,7 +60,7 @@ class PagerTelegramLongPolling(
                 e.message ?: "Произошла ошибка. Попробуйте позже."
             }
 
-        bot.execute(SendMessage(chatId, reply))
+        telegramBot.execute(SendMessage(chatId, reply))
     }
 
     private fun routeCommand(

@@ -92,6 +92,36 @@ class GlobalExceptionHandler {
             ErrorResponse(error = "USER_NOT_FOUND", message = ex.message ?: "User not found"),
         )
 
+    @ExceptionHandler(TelegramUserNotAvailableException::class)
+    fun handleTelegramUserNotAvailable(ex: TelegramUserNotAvailableException): ResponseEntity<ErrorResponse> =
+        ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+            ErrorResponse(error = "TELEGRAM_USER_NOT_AVAILABLE", message = ex.message ?: "Telegram not available"),
+        )
+
+    @ExceptionHandler(InvalidLoginCodeException::class)
+    fun handleInvalidLoginCode(ex: InvalidLoginCodeException): ResponseEntity<ErrorResponse> =
+        ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+            ErrorResponse(error = "INVALID_LOGIN_CODE", message = ex.message ?: "Invalid login code"),
+        )
+
+    @ExceptionHandler(ReceiverHasNoPagerException::class)
+    fun handleReceiverNoPager(ex: ReceiverHasNoPagerException): ResponseEntity<ErrorResponse> =
+        ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+            ErrorResponse(error = "VALIDATION_ERROR", message = ex.message ?: "Receiver has no pager"),
+        )
+
+    @ExceptionHandler(org.springframework.security.core.AuthenticationException::class)
+    fun handleAuthentication(ex: org.springframework.security.core.AuthenticationException): ResponseEntity<ErrorResponse> =
+        ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+            ErrorResponse(error = "AUTHENTICATION_REQUIRED", message = ex.message ?: "Authentication required"),
+        )
+
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException::class)
+    fun handleAccessDenied(ex: org.springframework.security.access.AccessDeniedException): ResponseEntity<ErrorResponse> =
+        ResponseEntity.status(HttpStatus.FORBIDDEN).body(
+            ErrorResponse(error = "ACCESS_DENIED", message = ex.message ?: "Access denied"),
+        )
+
     @ExceptionHandler(Exception::class)
     fun handleGeneric(ex: Exception): ResponseEntity<ErrorResponse> {
         log.error("[INTERNAL] Unhandled error", ex)

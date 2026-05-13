@@ -1,6 +1,6 @@
-# Smart Retro Pager — Backend (Phase 3–4B)
+# Smart Retro Pager — Backend (Phase 3–4C)
 
-Kotlin Spring Boot REST API: PostgreSQL (Flyway) + MQTT publish (Eclipse Paho) to `pager/{deviceId}/rx` as **plain text** (`Sender: text`). **Phase 4A** adds device–Telegram pairing (`/bind`, `/unbind`, PIN, MQTT `pager/{deviceId}/sys`). **Phase 4B** adds **Telegram messaging without a sender pager**: `/send`, `/send_device`, `/history`, `/devices`, user profile REST, and a **static Web UI** at `http://localhost:8080/` (no auth).
+Kotlin Spring Boot REST API: PostgreSQL (Flyway) + MQTT publish (Eclipse Paho) to `pager/{deviceId}/rx` as **plain text** (`Sender: text`). **Phase 4A** — pairing (`/bind`, PIN, MQTT `sys`). **Phase 4B** — Telegram `/send`, public `GET /api/v1/users/...`, static Web UI. **Phase 4C** — **Web UI login**: одноразовый код в Telegram + **JWT**, защищённые **`/api/v1/me/**`** (профиль, история, отправка по username); публичные debug API (`/api/v1/users/**`, `POST /api/v1/messages`, устройства) остаются без JWT для MVP.
 
 ## Prerequisites
 
@@ -163,9 +163,58 @@ curl -s 'http://localhost:8080/api/v1/users/bob/messages?limit=20'
 
 ### Web UI (static)
 
-With the backend running, open **`http://localhost:8080/`** in a browser. Load profile + message history by **username**, and use the form to **`POST /api/v1/messages`** (deviceId + senderName + text) for a quick test send.
+Откройте **`http://localhost:8080/`**. **Phase 4C:** экран входа — введите **username**, «Отправить код» (код приходит в Telegram от бота), затем введите **6 цифр** и «Войти». JWT хранится в `localStorage` (`smartPagerAccessToken`). После входа UI дергает **`GET /api/v1/me`**, **`GET /api/v1/me/messages`**, **`POST /api/v1/me/send`** (отправителю **не нужен** свой пейджер; у получателя должен быть bound device).
 
-## 9. Build and tests
+Перед первым `request-code` пользователь должен написать боту **`/start`** (или любую команду), чтобы в БД появился `telegram_id`.
+
+Ниже в UI остаётся свёрнутая форма **публичного** `POST /api/v1/messages` по `deviceId` для отладки.
+
+## 9. Phase 4C — Web auth (Telegram code + JWT)
+
+### Environment variables
+
+| Variable | Purpose |
+|----------|---------|
+| `WEB_AUTH_CODE_SALT` | Salt for SHA-256 of the **one-time web login code** (default in `application.yml` is dev-only). |
+| `WEB_AUTH_JWT_SECRET` | HMAC key for HS256 JWT (**≥ 32 bytes**). Change in any real deployment. |
+| `TG_BOT_TOKEN` | Required to **deliver** login codes via Telegram (same bot as commands). |
+
+Docker Compose passes `WEB_AUTH_*` from the host (see repo `docker-compose.yml`).
+
+### Auth API
+
+```bash
+# 1) Request code (Telegram DM)
+curl -s -X POST http://localhost:8080/api/v1/auth/request-code \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice"}'
+
+# 2) Exchange code for JWT
+curl -s -X POST http://localhost:8080/api/v1/auth/verify-code \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","code":"123456"}'
+
+# 3) Call protected API
+curl -s http://localhost:8080/api/v1/me -H "Authorization: Bearer <accessToken>"
+
+curl -s -X POST http://localhost:8080/api/v1/me/send \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"targetUsername":"bob","text":"Hello from Web"}'
+```
+
+### Security model (MVP)
+
+| Area | Policy |
+|------|--------|
+| **Protected** | `GET/POST /api/v1/me/**` — requires `Authorization: Bearer …` |
+| **Public** | `POST /api/v1/auth/request-code`, `POST /api/v1/auth/verify-code` |
+| **Public (demo/debug)** | `GET /api/v1/users/**`, `GET/POST /api/v1/devices/**`, `POST /api/v1/messages` |
+| **Static** | `/`, `/index.html`, `/styles.css`, `/app.js`, `/favicon.ico` |
+
+No refresh tokens, no password login, no RBAC.
+
+## 10. Build and tests
 
 ```bash
 export JAVA_HOME=$(/usr/libexec/java_home -v 17)   # if needed
@@ -185,6 +234,6 @@ Structured JSON, e.g.:
 }
 ```
 
-Codes: `VALIDATION_ERROR`, `PAYLOAD_TOO_LONG`, `MQTT_PUBLISH_ERROR`, `INTERNAL_ERROR`, `USER_NOT_FOUND`, `ALREADY_BOUND`, `DEVICE_BOUND_TO_ANOTHER_USER`, `INVALID_PIN_FORMAT`, `INVALID_OR_EXPIRED_PIN`.
+Codes: `VALIDATION_ERROR`, `PAYLOAD_TOO_LONG`, `MQTT_PUBLISH_ERROR`, `INTERNAL_ERROR`, `USER_NOT_FOUND`, `TELEGRAM_USER_NOT_AVAILABLE`, `INVALID_LOGIN_CODE`, `AUTHENTICATION_REQUIRED`, `ACCESS_DENIED`, `ALREADY_BOUND`, `DEVICE_BOUND_TO_ANOTHER_USER`, `INVALID_PIN_FORMAT`, `INVALID_OR_EXPIRED_PIN`.
 
 If MQTT publish fails after the row is stored, `deliveredToMqtt` stays `false` and the API returns **500** with `MQTT_PUBLISH_ERROR`.

@@ -3,41 +3,67 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Smart Retro Pager — Archive</title>
+  <title>Smart Retro Pager — Web</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <header class="header">
-    <h1>&gt; SMART RETRO PAGER ARCHIVE</h1>
-    <p class="sub">Phase 4B — history by username (no login)</p>
+    <h1>&gt; SMART RETRO PAGER</h1>
+    <p class="sub">Phase 4C — вход по коду из Telegram · JWT</p>
   </header>
 
-  <section class="panel">
-    <h2>Profile &amp; history</h2>
+  <section id="view-login" class="panel">
+    <h2>Вход</h2>
+    <p class="hint">Сначала откройте бота в Telegram и нажмите <code>/start</code>, чтобы мы знали ваш <code>telegram_id</code>.</p>
     <div class="row">
-      <label for="username">username</label>
-      <input id="username" type="text" placeholder="alice" autocomplete="off" />
-      <button type="button" id="btn-load">LOAD</button>
+      <label for="login-username">username</label>
+      <input id="login-username" type="text" placeholder="alice" autocomplete="username" />
+      <button type="button" id="btn-request-code" disabled>Отправить код</button>
     </div>
-    <p id="profile-status" class="status"></p>
-    <pre id="profile-block" class="block hidden"></pre>
+    <div class="row">
+      <label for="login-code">код из Telegram</label>
+      <input id="login-code" type="text" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code" />
+      <button type="button" id="btn-verify" disabled>Войти</button>
+    </div>
+    <p id="login-status" class="status"></p>
   </section>
 
-  <section class="panel">
-    <h2>Messages</h2>
-    <p id="messages-status" class="status"></p>
-    <div id="messages-list" class="messages"></div>
-  </section>
+  <section id="view-app" class="panel hidden">
+    <div class="row between">
+      <p id="session-line" class="session"></p>
+      <button type="button" id="btn-logout">Выйти</button>
+    </div>
 
-  <section class="panel">
-    <h2>Test send (POST /api/v1/messages)</h2>
+    <h2>Профиль (GET /api/v1/me)</h2>
+    <p id="me-status" class="status"></p>
+    <pre id="me-block" class="block hidden"></pre>
+
+    <h2>Сообщения на мои пейджеры</h2>
+    <p id="me-messages-status" class="status"></p>
+    <div id="me-messages-list" class="messages"></div>
+
+    <h2>Отправить пользователю (POST /api/v1/me/send)</h2>
     <div class="grid">
-      <label>deviceId <input id="send-device" type="text" placeholder="84F3EB12ABCD" /></label>
-      <label>senderName <input id="send-sender" type="text" placeholder="web" /></label>
-      <label class="full">text <input id="send-text" type="text" placeholder="Hello" /></label>
+      <label class="full">target username
+        <input id="send-target-user" type="text" placeholder="bob" autocomplete="off" />
+      </label>
+      <label class="full">текст
+        <input id="send-target-text" type="text" placeholder="Привет из Web" />
+      </label>
     </div>
-    <button type="button" id="btn-send">SEND</button>
-    <p id="send-status" class="status"></p>
+    <button type="button" id="btn-me-send">Отправить</button>
+    <p id="me-send-status" class="status"></p>
+
+    <details class="details-demo">
+      <summary>Отладка: прямой POST /api/v1/messages по deviceId</summary>
+      <div class="grid">
+        <label>deviceId <input id="demo-device" type="text" placeholder="84F3EB12ABCD" /></label>
+        <label>senderName <input id="demo-sender" type="text" placeholder="web" /></label>
+        <label class="full">text <input id="demo-text" type="text" /></label>
+      </div>
+      <button type="button" id="btn-demo-send">Отправить (без JWT)</button>
+      <p id="demo-send-status" class="status"></p>
+    </details>
   </section>
 
   <script src="/app.js"></script>
