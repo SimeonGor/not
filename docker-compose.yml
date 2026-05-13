@@ -32,18 +32,14 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: pager-backend
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
       mosquitto:
         condition: service_started
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pager_db
-      SPRING_DATASOURCE_USERNAME: pager_user
-      SPRING_DATASOURCE_PASSWORD: pager_password
-      MQTT_BROKER_URL: tcp://mosquitto:1883
-      MQTT_CLIENT_ID: pager-backend
-      MQTT_QOS: "1"
+      SPRING_PROFILES_ACTIVE: docker
     ports:
       - "8080:8080"
 

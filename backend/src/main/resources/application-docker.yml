@@ -1,0 +1,11 @@
+# Профиль для запуска в Docker Compose (имена сервисов вместо localhost).
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/pager_db
+    username: pager_user
+    password: pager_password
+
+mqtt:
+  broker-url: tcp://mosquitto:1883
+  client-id: pager-backend
+  qos: 1
